@@ -43,7 +43,9 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
           ? "You are excluded from betting in this market."
         : query.error === "invalid_bet"
           ? "Enter a valid side and amount to place a bet."
-          : "";
+          : query.error === "max_bet"
+            ? "Maximum bet amount is $100."
+            : "";
 
   return (
     <div className="grid gap-6">
@@ -149,9 +151,10 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
               name="amount"
               type="number"
               min="1"
+              max="100"
               step="1"
               required
-              placeholder="Amount"
+              placeholder="Amount (max $100)"
               className="rounded-xl border border-border bg-background-secondary p-2.5 transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
               disabled={!canBet}
             />

@@ -234,6 +234,9 @@ export async function placeBetAction(formData: FormData) {
   if (!marketId || (side !== "yes" && side !== "no") || amount <= 0) {
     redirect(`/markets/${marketId}?error=invalid_bet`);
   }
+  if (amount > 100) {
+    redirect(`/markets/${marketId}?error=max_bet`);
+  }
   await connectToDatabase();
 
   const market = await MarketModel.findById(marketId);

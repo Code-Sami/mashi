@@ -113,7 +113,7 @@ export function CreateMarketForm({ groupId, members }: CreateMarketFormProps) {
           required
           value={question}
           onChange={(event) => handleQuestionChange(event.target.value)}
-          placeholder="Market question (use @ to mention people)"
+          placeholder="Yes/No question (use @ to mention people)"
           className="w-full rounded-xl border border-border bg-background-secondary p-2.5 transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
         />
         {mentionQuery !== null && suggestionList.length > 0 ? (
@@ -151,7 +151,6 @@ export function CreateMarketForm({ groupId, members }: CreateMarketFormProps) {
         <input type="checkbox" name="excludeUmpire" className="h-4 w-4 rounded border-border accent-brand" />
         Exclude umpire from betting
       </label>
-      <p className="text-xs text-foreground-tertiary md:col-span-2">Excluded users cannot place bets in this market.</p>
       <button className="rounded-xl bg-brand px-4 py-2.5 font-semibold text-brand-dark transition hover:bg-brand-hover md:col-span-2">Create market</button>
     </form>
   );
