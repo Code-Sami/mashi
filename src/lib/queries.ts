@@ -196,21 +196,23 @@ export async function getGroupsDirectoryData(userId: string) {
 
   const memberships = await GroupMemberModel.find({ userId }).lean();
   const membershipSet = new Set(memberships.map((membership) => membership.groupId.toString()));
-  const groups = await GroupModel.find().sort({ createdAt: -1 }).lean();
+  const groups = await GroupModel.find().lean();
   const allMembers = await GroupMemberModel.find({
     groupId: { $in: groups.map((group) => group._id) },
   }).lean();
   const myPendingRequests = await JoinRequestModel.find({ userId, status: "pending" }).lean();
   const pendingSet = new Set(myPendingRequests.map((r) => r.groupId.toString()));
 
-  return groups.map((group) => ({
-    id: group._id.toString(),
-    name: group.name,
-    visibility: (group.visibility || "public") as "public" | "private",
-    memberCount: allMembers.filter((member) => member.groupId.toString() === group._id.toString()).length,
-    isMember: membershipSet.has(group._id.toString()),
-    hasPendingRequest: pendingSet.has(group._id.toString()),
-  }));
+  return groups
+    .map((group) => ({
+      id: group._id.toString(),
+      name: group.name,
+      visibility: (group.visibility || "public") as "public" | "private",
+      memberCount: allMembers.filter((member) => member.groupId.toString() === group._id.toString()).length,
+      isMember: membershipSet.has(group._id.toString()),
+      hasPendingRequest: pendingSet.has(group._id.toString()),
+    }))
+    .sort((a, b) => b.memberCount - a.memberCount);
 }
 
 export async function getMarketDetailData(marketId: string) {
@@ -250,6 +252,7 @@ export async function getMarketDetailData(marketId: string) {
       userId: bet.userId.toString(),
       side: bet.side,
       amount: bet.amount,
+      payout: (bet as typeof bet & { payout?: number }).payout ?? 0,
       yesPriceAfter: bet.yesPriceAfter,
       noPriceAfter: bet.noPriceAfter,
       createdAt: bet.createdAt?.toISOString(),

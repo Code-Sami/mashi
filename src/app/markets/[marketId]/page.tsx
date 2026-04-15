@@ -1,6 +1,7 @@
 import { placeBetAction, resolveMarketAction } from "@/app/actions";
 import { MarketQuestionWithMentions } from "@/components/market-question-with-mentions";
 import { PriceHistoryChart } from "@/components/price-history-chart";
+import { SettlementCard, SettlementPopup } from "@/components/settlement-popup";
 import { connectToDatabase } from "@/lib/mongodb";
 import { getMarketDetailData } from "@/lib/queries";
 import { GroupMemberModel } from "@/models/GroupMember";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 type MarketPageProps = {
   params: Promise<{ marketId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; resolved?: string }>;
 };
 
 export default async function MarketPage({ params, searchParams }: MarketPageProps) {
@@ -46,6 +47,23 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
           : query.error === "max_bet"
             ? "Maximum bet amount is $100."
             : "";
+
+  const isResolved = data.market.status === "resolved" && !!data.market.outcome;
+  const showSettlementPopup = query.resolved === "true" && isResolved;
+  const settlementEntries = isResolved
+    ? data.bets.map((bet) => {
+        const actor = userMap.get(bet.userId);
+        const payout = (bet as typeof bet & { payout?: number }).payout ?? 0;
+        return {
+          userId: bet.userId,
+          name: actor?.name || "Unknown user",
+          side: bet.side as "yes" | "no",
+          amount: bet.amount,
+          payout,
+          pnl: payout - bet.amount,
+        };
+      })
+    : [];
 
   return (
     <div className="grid gap-6">
@@ -122,61 +140,69 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
           </div>
         </article>
 
-        <article className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6">
-          <h2 className="font-semibold">Place bet</h2>
-          {errorMessage ? <p className="mt-2 rounded-xl bg-decrease/10 p-3 text-sm text-decrease">{errorMessage}</p> : null}
-          {!isMember ? (
-            <p className="mt-2 rounded-xl bg-background-secondary p-3 text-sm text-foreground-secondary">
-              You are viewing this market publicly. Join the group to place bets.
-            </p>
-          ) : null}
-          {isExcludedFromBetting ? (
-            <p className="mt-2 rounded-xl bg-decrease/10 p-3 text-sm text-decrease">
-              You are excluded from participating in this market.
-            </p>
-          ) : null}
-          <form action={placeBetAction} className="mt-3 grid gap-2">
-            <input type="hidden" name="marketId" value={data.market.id} />
-            <div className="grid grid-cols-2 gap-2">
-              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-yes/30 bg-yes-bg p-3 text-sm font-semibold text-yes has-[:checked]:border-yes has-[:checked]:shadow-sm">
-                <input type="radio" name="side" value="yes" defaultChecked className="sr-only" disabled={!canBet} />
-                Yes
-              </label>
-              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-no/30 bg-no-bg p-3 text-sm font-semibold text-no has-[:checked]:border-no has-[:checked]:shadow-sm">
-                <input type="radio" name="side" value="no" className="sr-only" disabled={!canBet} />
-                No
-              </label>
-            </div>
-            <input
-              name="amount"
-              type="number"
-              min="1"
-              max="100"
-              step="1"
-              required
-              placeholder="Amount (max $100)"
-              className="rounded-xl border border-border bg-background-secondary p-2.5 transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-              disabled={!canBet}
-            />
-            <button disabled={!canBet} className="rounded-xl bg-brand px-4 py-2.5 font-semibold text-brand-dark transition hover:bg-brand-hover disabled:bg-border disabled:text-foreground-tertiary">
-              Place bet
-            </button>
-          </form>
-          {canResolve && data.market.status === "open" ? (
-            <div className="mt-4 flex gap-2 border-t border-border-light pt-4">
-              <form action={resolveMarketAction} className="flex-1">
-                <input type="hidden" name="marketId" value={data.market.id} />
-                <input type="hidden" name="outcome" value="yes" />
-                <button className="w-full rounded-xl bg-yes px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90">Resolve YES</button>
-              </form>
-              <form action={resolveMarketAction} className="flex-1">
-                <input type="hidden" name="marketId" value={data.market.id} />
-                <input type="hidden" name="outcome" value="no" />
-                <button className="w-full rounded-xl bg-no px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90">Resolve NO</button>
-              </form>
-            </div>
-          ) : null}
-        </article>
+        {isResolved ? (
+          <SettlementCard
+            outcome={data.market.outcome as "yes" | "no"}
+            totalPool={data.market.totalVolume}
+            entries={settlementEntries}
+          />
+        ) : (
+          <article className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6">
+            <h2 className="font-semibold">Place bet</h2>
+            {errorMessage ? <p className="mt-2 rounded-xl bg-decrease/10 p-3 text-sm text-decrease">{errorMessage}</p> : null}
+            {!isMember ? (
+              <p className="mt-2 rounded-xl bg-background-secondary p-3 text-sm text-foreground-secondary">
+                You are viewing this market publicly. Join the group to place bets.
+              </p>
+            ) : null}
+            {isExcludedFromBetting ? (
+              <p className="mt-2 rounded-xl bg-decrease/10 p-3 text-sm text-decrease">
+                You are excluded from participating in this market.
+              </p>
+            ) : null}
+            <form action={placeBetAction} className="mt-3 grid gap-2">
+              <input type="hidden" name="marketId" value={data.market.id} />
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-yes/30 bg-yes-bg p-3 text-sm font-semibold text-yes has-[:checked]:border-yes has-[:checked]:shadow-sm">
+                  <input type="radio" name="side" value="yes" defaultChecked className="sr-only" disabled={!canBet} />
+                  Yes
+                </label>
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-no/30 bg-no-bg p-3 text-sm font-semibold text-no has-[:checked]:border-no has-[:checked]:shadow-sm">
+                  <input type="radio" name="side" value="no" className="sr-only" disabled={!canBet} />
+                  No
+                </label>
+              </div>
+              <input
+                name="amount"
+                type="number"
+                min="1"
+                max="100"
+                step="1"
+                required
+                placeholder="Amount (max $100)"
+                className="rounded-xl border border-border bg-background-secondary p-2.5 transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                disabled={!canBet}
+              />
+              <button disabled={!canBet} className="rounded-xl bg-brand px-4 py-2.5 font-semibold text-brand-dark transition hover:bg-brand-hover disabled:bg-border disabled:text-foreground-tertiary">
+                Place bet
+              </button>
+            </form>
+            {canResolve && data.market.status === "open" ? (
+              <div className="mt-4 flex gap-2 border-t border-border-light pt-4">
+                <form action={resolveMarketAction} className="flex-1">
+                  <input type="hidden" name="marketId" value={data.market.id} />
+                  <input type="hidden" name="outcome" value="yes" />
+                  <button className="w-full rounded-xl bg-yes px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90">Resolve YES</button>
+                </form>
+                <form action={resolveMarketAction} className="flex-1">
+                  <input type="hidden" name="marketId" value={data.market.id} />
+                  <input type="hidden" name="outcome" value="no" />
+                  <button className="w-full rounded-xl bg-no px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90">Resolve NO</button>
+                </form>
+              </div>
+            ) : null}
+          </article>
+        )}
       </section>
 
       <section className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6">
@@ -213,6 +239,16 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
           )}
         </div>
       </section>
+
+      {showSettlementPopup ? (
+        <SettlementPopup
+          question={data.market.question}
+          outcome={data.market.outcome as "yes" | "no"}
+          totalPool={data.market.totalVolume}
+          entries={settlementEntries}
+          marketId={data.market.id}
+        />
+      ) : null}
     </div>
   );
 }

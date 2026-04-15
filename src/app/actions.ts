@@ -326,6 +326,7 @@ export async function resolveMarketAction(formData: FormData) {
 
   revalidatePath(`/markets/${market._id.toString()}`);
   revalidatePath(`/groups/${market.groupId.toString()}`);
+  redirect(`/markets/${market._id.toString()}?resolved=true`);
 }
 
 export async function updateGroupAction(formData: FormData) {
