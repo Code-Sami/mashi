@@ -52,7 +52,7 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
         <>
           {/* Create Market */}
           {data.group.isMember ? (
-            <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--card-shadow)]">
+            <section className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-5">
               <h2 className="font-semibold">Create market</h2>
               <CreateMarketForm
                 groupId={groupId}

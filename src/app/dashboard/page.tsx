@@ -43,7 +43,7 @@ export default async function DashboardPage() {
       <section className="rounded-2xl border border-border bg-white p-6 shadow-[var(--card-shadow)]">
         <h1 className="text-2xl font-bold">Welcome back, {userFullName}</h1>
         <p className="mt-1 text-sm text-foreground-secondary">Here&apos;s what&apos;s happening across your groups.</p>
-        <div className="mt-4 grid grid-cols-3 gap-3">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-xl bg-background-secondary p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground-tertiary">Bets placed</p>
             <p className="mt-1 text-2xl font-bold">{data.stats.totalBets}</p>

@@ -49,7 +49,7 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
 
   return (
     <section className="rounded-2xl border border-border bg-white shadow-[var(--card-shadow)]">
-      <div className="flex flex-wrap items-center justify-between gap-4 p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:gap-4 sm:p-6">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold">{group.name}</h1>
@@ -110,7 +110,7 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
 
       {/* Members dropdown */}
       {membersOpen ? (
-        <div className="border-t border-border px-6 pb-5 pt-4">
+        <div className="border-t border-border px-4 pb-5 pt-4 sm:px-6">
           <div className="grid max-h-[20rem] gap-2 overflow-y-auto pr-1">
             {members.map((member) => (
               <div key={member.userId} className="flex items-center gap-3 rounded-xl border border-border-light p-2.5">
@@ -130,12 +130,12 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
       ) : null}
 
       {infoMessage ? (
-        <p className={`mx-6 ${membersOpen ? "mt-0" : ""} mb-4 rounded-xl bg-brand/10 p-3 text-sm text-brand-dark`}>{infoMessage}</p>
+        <p className={`mx-4 sm:mx-6 ${membersOpen ? "mt-0" : ""} mb-4 rounded-xl bg-brand/10 p-3 text-sm text-brand-dark`}>{infoMessage}</p>
       ) : null}
 
       {/* Owner settings panel */}
       {isOwner && settingsOpen ? (
-        <div className="border-t border-border px-6 pb-6 pt-5">
+        <div className="border-t border-border px-4 pb-6 pt-5 sm:px-6">
           <div className="grid gap-6 md:grid-cols-2">
             <div>
               <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-tertiary">Settings</h2>

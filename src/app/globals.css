@@ -32,3 +32,13 @@ body {
   background: #28cc95;
   color: white;
 }
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 640px) {
+  input, select, textarea, button {
+    font-size: 1rem;
+  }
+}

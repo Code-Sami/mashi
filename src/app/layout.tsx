@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { MobileNav } from "@/components/mobile-nav";
 import { SignOutButton } from "@/components/sign-out-button";
 import "./globals.css";
 
@@ -45,7 +46,7 @@ export default async function RootLayout({
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand text-sm font-black text-brand-dark">M</span>
               Mashi
             </Link>
-            <nav className="flex items-center gap-1 text-sm">
+            <nav className="hidden items-center gap-1 text-sm md:flex">
               {session?.user ? (
                 <>
                   <Link href="/dashboard" className="rounded-lg px-3 py-2 text-white/70 transition hover:bg-white/10 hover:text-white">
@@ -73,9 +74,10 @@ export default async function RootLayout({
                 </>
               )}
             </nav>
+            <MobileNav isLoggedIn={!!session?.user} userId={session?.user?.id} />
           </div>
         </header>
-        <main className="mx-auto w-full max-w-6xl px-4 py-8 md:px-8">{children}</main>
+        <main className="mx-auto w-full max-w-6xl px-3 py-5 sm:px-4 sm:py-8 md:px-8">{children}</main>
       </body>
     </html>
   );

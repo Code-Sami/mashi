@@ -55,9 +55,9 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
         </Link>
       </div>
 
-      <section className="rounded-2xl border border-border bg-white p-6 shadow-[var(--card-shadow)]">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="text-2xl font-bold">
+      <section className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6">
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-xl font-bold sm:text-2xl">
             <MarketQuestionWithMentions question={data.market.question} taggedUsers={data.taggedUsers} />
           </h1>
           <span className={`shrink-0 rounded-lg px-3 py-1 text-[0.9375rem] font-semibold ${data.market.status === "open" ? "bg-increase/10 text-increase" : "bg-foreground-tertiary/15 text-foreground-secondary"}`}>
@@ -72,7 +72,7 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
             </Link>
           </p>
         ) : null}
-        <div className="mt-3 flex flex-wrap gap-4 text-sm text-foreground-secondary">
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-foreground-secondary">
           <span>Deadline: {new Date(data.market.deadline).toLocaleString()}</span>
           <span>${data.market.totalVolume.toFixed(2)} volume</span>
           {data.market.outcome ? (
@@ -108,7 +108,7 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
       </section>
 
       <section className="grid gap-4 md:grid-cols-2">
-        <article className="rounded-2xl border border-border bg-white p-6 shadow-[var(--card-shadow)]">
+        <article className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6">
           <h2 className="font-semibold">Current prices</h2>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-xl bg-yes-bg p-5">
@@ -122,7 +122,7 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
           </div>
         </article>
 
-        <article className="rounded-2xl border border-border bg-white p-6 shadow-[var(--card-shadow)]">
+        <article className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6">
           <h2 className="font-semibold">Place bet</h2>
           {errorMessage ? <p className="mt-2 rounded-xl bg-decrease/10 p-3 text-sm text-decrease">{errorMessage}</p> : null}
           {!isMember ? (
@@ -179,12 +179,12 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
         </article>
       </section>
 
-      <section className="rounded-2xl border border-border bg-white p-6 shadow-[var(--card-shadow)]">
+      <section className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6">
         <h2 className="font-semibold">Price history</h2>
         <PriceHistoryChart points={data.priceHistory} />
       </section>
 
-      <section className="rounded-2xl border border-border bg-white p-6 shadow-[var(--card-shadow)]">
+      <section className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6">
         <h2 className="font-semibold">Activity</h2>
         <div className="mt-3 grid max-h-[24rem] gap-2 overflow-y-auto pr-1">
           {data.bets.length === 0 ? (

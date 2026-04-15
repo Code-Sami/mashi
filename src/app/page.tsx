@@ -45,14 +45,14 @@ export default async function HomePage() {
   return (
     <div className="grid gap-16 py-6">
       {/* Hero */}
-      <section className="relative overflow-hidden rounded-3xl bg-brand-dark px-8 py-16 text-white md:px-16 md:py-20">
+      <section className="relative overflow-hidden rounded-3xl bg-brand-dark px-5 py-10 text-white sm:px-8 sm:py-16 md:px-16 md:py-20">
         <div className="absolute -right-20 -top-20 h-80 w-80 rounded-full bg-brand/10 blur-3xl" />
         <div className="absolute -bottom-32 -left-16 h-64 w-64 rounded-full bg-brand/5 blur-2xl" />
         <div className="relative z-10 max-w-2xl">
           <p className="inline-block rounded-full border border-brand/30 bg-brand/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-brand">
             Social prediction markets
           </p>
-          <h1 className="mt-6 text-4xl font-extrabold leading-[1.1] tracking-tight md:text-5xl lg:text-6xl">
+          <h1 className="mt-6 text-3xl font-extrabold leading-[1.1] tracking-tight sm:text-4xl md:text-5xl lg:text-6xl">
             Your group chat already makes predictions.
             <span className="text-brand"> Now make them count.</span>
           </h1>
@@ -84,7 +84,7 @@ export default async function HomePage() {
       </section>
 
       {/* How it works */}
-      <section className="grid gap-5 md:grid-cols-3">
+      <section className="grid gap-5 sm:grid-cols-2 md:grid-cols-3">
         <article className="group rounded-2xl border border-border bg-white p-7 shadow-[var(--card-shadow)] transition hover:border-brand/40 hover:shadow-md">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand/10 text-xl transition group-hover:bg-brand/20">
             <svg className="h-6 w-6 text-brand-dark" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
@@ -117,7 +117,7 @@ export default async function HomePage() {
       {/* Live preview cards */}
       <section>
         <h2 className="mb-6 text-center text-2xl font-bold md:text-3xl">See it in action</h2>
-        <div className="grid gap-5 md:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3">
           {/* Active markets card */}
           <article className="rounded-2xl border border-border bg-white p-5 shadow-[var(--card-shadow)]">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground-tertiary">Active markets</h3>
@@ -204,8 +204,8 @@ export default async function HomePage() {
       </section>
 
       {/* Social proof / tagline */}
-      <section className="rounded-3xl bg-brand-dark px-8 py-14 text-center text-white md:px-16">
-        <h2 className="text-3xl font-extrabold tracking-tight md:text-4xl">
+      <section className="rounded-3xl bg-brand-dark px-5 py-10 text-center text-white sm:px-8 sm:py-14 md:px-16">
+        <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl md:text-4xl">
           Stop arguing. Start betting.
         </h2>
         <p className="mx-auto mt-4 max-w-lg text-white/50">

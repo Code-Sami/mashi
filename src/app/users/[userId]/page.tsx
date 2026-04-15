@@ -42,7 +42,7 @@ export default async function PublicUserProfilePage({ params }: UserProfilePageP
         </div>
       </section>
 
-      <section className="grid gap-4 grid-cols-3">
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <article className="rounded-2xl border border-border bg-white p-5 shadow-[var(--card-shadow)]">
           <p className="text-xs font-semibold uppercase tracking-wide text-foreground-tertiary">Bets</p>
           <p className="mt-2 text-3xl font-bold">{data.stats.betsPlaced}</p>
