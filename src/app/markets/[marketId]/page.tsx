@@ -97,19 +97,7 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
             <span className="font-semibold">Outcome: <span className={data.market.outcome === "yes" ? "text-yes" : "text-no"}>{data.market.outcome.toUpperCase()}</span></span>
           ) : null}
         </div>
-        {data.taggedUsers.length > 0 ? (
-          <p className="mt-2 text-sm text-foreground-secondary">
-            Tagged:{" "}
-            {data.taggedUsers.map((tagged, index) => (
-              <span key={tagged.id}>
-                <Link href={`/users/${tagged.id}`} className="font-medium text-brand-dark hover:underline">
-                  {tagged.name}
-                </Link>
-                {index < data.taggedUsers.length - 1 ? ", " : ""}
-              </span>
-            ))}
-          </p>
-        ) : null}
+
         {data.excludedUsers.length > 0 ? (
           <p className="mt-1 text-sm text-foreground-secondary">
             Excluded from betting:{" "}
