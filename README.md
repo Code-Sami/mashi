@@ -9,6 +9,7 @@ Mashi is a social prediction market web app for private friend groups. Create Ye
 - **NextAuth v4** (Credentials provider, JWT sessions)
 - **MongoDB** via **Mongoose 9**
 - **bcryptjs** for password hashing
+- **OpenAI GPT-4o-mini** for AI content moderation
 
 ## Features
 
@@ -16,7 +17,10 @@ Mashi is a social prediction market web app for private friend groups. Create Ye
 - Email/password authentication (sign up, login, logout)
 - Public and private groups with invite codes
 - Join requests for private groups (approve/deny by owner)
+- Group owner can remove members
 - Group pages with members, activity feed, active/resolved markets
+- AI-powered content moderation on market creation (owner can override)
+- Moderation audit log visible to group owners in settings
 - Create markets via modal dialog with deadlines, tagged users, and excluded users
 - Yes/No pooled-share trading model with price history chart
 - Two-step bet confirmation with estimated payout preview (pari-mutuel snapshot)
@@ -40,6 +44,7 @@ MONGODB_URI=mongodb://<atlas-user>:<atlas-password>@<host1>:27017,<host2>:27017,
 MONGODB_DB=Mashi
 NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=replace-with-a-long-random-secret
+OPENAI_API_KEY=sk-your-openai-api-key
 ```
 
 3. Start development:
@@ -117,6 +122,7 @@ src/
     sign-out-button.tsx
   lib/
     auth.ts                 # NextAuth config (Credentials provider)
+    moderation.ts           # AI content moderation via OpenAI
     mongodb.ts              # Mongoose connection with caching
     session.ts              # Server-side auth helpers
     seed.ts                 # Auto-seed on empty DB
@@ -133,6 +139,7 @@ src/
     Market.ts
     Bet.ts
     MarketPriceHistory.ts
+    ModerationLog.ts
     Activity.ts
   types/
     next-auth.d.ts          # Session/JWT type extensions
@@ -152,6 +159,7 @@ scripts/
 | `markets` | question, deadline, umpireId, groupId, yesShares, noShares, status, outcome |
 | `bets` | marketId, userId, side, amount, payout |
 | `marketPriceHistory` | marketId, yesPrice, noPrice, timestamp |
+| `moderationLogs` | groupId, userId, question, verdict (rejected/overridden), reason, overriddenBy |
 | `activities` | type (market_created/bet_placed/market_resolved/member_joined) |
 
 ## Pricing Model
