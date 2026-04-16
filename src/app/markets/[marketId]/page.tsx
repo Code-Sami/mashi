@@ -1,4 +1,5 @@
 import { BetForm } from "@/components/bet-form";
+import { DeleteMarketButton } from "@/components/delete-market-button";
 import { ResolveControls } from "@/components/resolve-controls";
 import { MarketQuestionWithMentions } from "@/components/market-question-with-mentions";
 import { PriceHistoryChart } from "@/components/price-history-chart";
@@ -33,6 +34,8 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
     })
   );
   const canResolve = data.market.umpireId === user._id.toString();
+  const isGroupOwner = data.groupOwnerId === user._id.toString();
+  const hasBets = data.bets.length > 0;
   const isExcludedFromBetting = (data.market.excludedUserIds || []).includes(user._id.toString());
   const isPastDeadline = new Date(data.market.deadline).getTime() < Date.now();
   const canBet = data.market.status === "open" && isMember && !isExcludedFromBetting && !isPastDeadline;
@@ -161,6 +164,18 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
         {canResolve && data.market.status === "open" ? (
           <article className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6 md:col-span-2">
             <ResolveControls marketId={data.market.id} />
+          </article>
+        ) : null}
+
+        {isGroupOwner && !hasBets ? (
+          <article className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6 md:col-span-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-foreground-secondary">Delete market</h2>
+                <p className="mt-0.5 text-sm text-foreground-tertiary">This market has no bets and can be permanently deleted.</p>
+              </div>
+              <DeleteMarketButton marketId={data.market.id} question={data.market.question} />
+            </div>
           </article>
         ) : null}
       </section>

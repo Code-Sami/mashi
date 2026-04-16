@@ -36,6 +36,10 @@ const moderationLogSchema = new Schema(
       ref: "Market",
       default: null,
     },
+    dismissedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );

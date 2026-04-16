@@ -103,11 +103,12 @@ export async function signupAction(formData: FormData) {
 
 export async function createGroupAction(formData: FormData) {
   const user = await requireAuthUser();
-  await connectToDatabase();
+  const conn = await connectToDatabase();
   await ensureSeedData();
 
   const name = formData.get("name")?.toString().trim() || "";
   if (!name) throw new Error("Group name is required.");
+  const visibility = formData.get("visibility")?.toString() === "private" ? "private" : "public";
 
   const publicCode = `PUBLIC-${Date.now().toString(36).toUpperCase()}`;
   const group = await GroupModel.create({
@@ -116,6 +117,10 @@ export async function createGroupAction(formData: FormData) {
     ownerId: user._id,
     inviteCode: publicCode,
   });
+  await conn.connection.db!.collection("groups").updateOne(
+    { _id: group._id },
+    { $set: { visibility } }
+  );
 
   await GroupMemberModel.create({ groupId: group._id, userId: user._id, role: "owner" });
   await ActivityModel.create({
@@ -470,6 +475,35 @@ export async function updateGroupAction(formData: FormData) {
   redirect(`/groups/${groupId}`);
 }
 
+export async function deleteMarketAction(formData: FormData) {
+  const user = await requireAuthUser();
+  const marketId = formData.get("marketId")?.toString() || "";
+  if (!marketId) throw new Error("Market id is required.");
+
+  await connectToDatabase();
+  const market = await MarketModel.findById(marketId);
+  if (!market) throw new Error("Market not found.");
+
+  const group = await GroupModel.findById(market.groupId).lean();
+  if (!group) throw new Error("Group not found.");
+  if (group.ownerId.toString() !== user._id.toString()) {
+    throw new Error("Only the group owner can delete a market.");
+  }
+
+  const betCount = await BetModel.countDocuments({ marketId: market._id });
+  if (betCount > 0) throw new Error("Cannot delete a market that has bets.");
+
+  await Promise.all([
+    MarketPriceHistoryModel.deleteMany({ marketId: market._id }),
+    ActivityModel.deleteMany({ marketId: market._id }),
+    MarketModel.deleteOne({ _id: market._id }),
+  ]);
+
+  const groupId = market.groupId.toString();
+  revalidatePath(`/groups/${groupId}`);
+  redirect(`/groups/${groupId}`);
+}
+
 export async function deleteGroupAction(formData: FormData) {
   const user = await requireAuthUser();
   const groupId = formData.get("groupId")?.toString() || "";
@@ -568,6 +602,46 @@ export async function denyJoinRequestAction(formData: FormData) {
   await JoinRequestModel.updateOne({ _id: requestId }, { $set: { status: "denied" } });
 
   revalidatePath(`/groups/${joinReq.groupId.toString()}`);
+}
+
+export async function dismissModerationLogAction(formData: FormData) {
+  const user = await requireAuthUser();
+  const logId = formData.get("logId")?.toString() || "";
+  if (!logId) throw new Error("Log id is required.");
+
+  const conn = await connectToDatabase();
+  const log = await ModerationLogModel.findById(logId);
+  if (!log) throw new Error("Moderation log not found.");
+
+  const group = await GroupModel.findById(log.groupId).lean();
+  if (!group || group.ownerId.toString() !== user._id.toString()) {
+    throw new Error("Only the group owner can dismiss moderation logs.");
+  }
+
+  await conn.connection.db!.collection("moderationlogs").updateOne(
+    { _id: new Types.ObjectId(logId) },
+    { $set: { dismissedAt: new Date() } }
+  );
+  revalidatePath(`/groups/${log.groupId.toString()}`);
+}
+
+export async function dismissAllModerationLogsAction(formData: FormData) {
+  const user = await requireAuthUser();
+  const groupId = formData.get("groupId")?.toString() || "";
+  if (!groupId) throw new Error("Group id is required.");
+
+  const conn = await connectToDatabase();
+  const group = await GroupModel.findById(groupId).lean();
+  if (!group) throw new Error("Group not found.");
+  if (group.ownerId.toString() !== user._id.toString()) {
+    throw new Error("Only the group owner can dismiss moderation logs.");
+  }
+
+  await conn.connection.db!.collection("moderationlogs").updateMany(
+    { groupId: new Types.ObjectId(groupId), dismissedAt: null },
+    { $set: { dismissedAt: new Date() } }
+  );
+  revalidatePath(`/groups/${groupId}`);
 }
 
 export async function updateProfileAction(formData: FormData) {

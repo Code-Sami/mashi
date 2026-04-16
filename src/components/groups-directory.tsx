@@ -79,6 +79,14 @@ export function GroupsDirectory({ groups }: { groups: GroupEntry[] }) {
               placeholder="New group name"
               className="flex-1 rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
             />
+            <select
+              name="visibility"
+              defaultValue="public"
+              className="rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            >
+              <option value="public">Public</option>
+              <option value="private">Private</option>
+            </select>
             <button className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">
               Create
             </button>

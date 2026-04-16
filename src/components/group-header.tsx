@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useOptimistic, useTransition } from "react";
 import { useState } from "react";
 import {
   joinGroupAction,
@@ -12,6 +13,8 @@ import {
   denyJoinRequestAction,
   deleteGroupAction,
   overrideModerationAction,
+  dismissModerationLogAction,
+  dismissAllModerationLogsAction,
 } from "@/app/actions";
 import { CreateMarketButton } from "@/components/create-market-modal";
 
@@ -60,12 +63,13 @@ type Props = {
   }[];
 };
 
-function ModerationLogEntry({ log, members }: { log: Props["moderationLogs"] extends (infer T)[] | undefined ? T : never; members: Member[] }) {
+function ModerationLogEntry({ log, members, onDismiss }: {
+  log: Props["moderationLogs"] extends (infer T)[] | undefined ? T : never;
+  members: Member[];
+  onDismiss: (formData: FormData) => void;
+}) {
   const [showForm, setShowForm] = useState(false);
-  const [hidden, setHidden] = useState(false);
   const isRejected = log.verdict === "rejected";
-
-  if (hidden) return null;
 
   return (
     <div className="rounded-xl border border-border-light p-3 text-sm">
@@ -75,15 +79,16 @@ function ModerationLogEntry({ log, members }: { log: Props["moderationLogs"] ext
           <span className={`rounded-lg px-2 py-0.5 text-xs font-semibold ${log.verdict === "overridden" ? "bg-amber-100 text-amber-700" : "bg-decrease/10 text-decrease"}`}>
             {log.verdict === "overridden" ? "Overridden" : "Rejected"}
           </span>
-          <button
-            type="button"
-            onClick={() => setHidden(true)}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-foreground-tertiary transition hover:bg-background-secondary hover:text-foreground-secondary"
-            aria-label="Dismiss"
-            title="Dismiss"
-          >
-            &times;
-          </button>
+          <form action={onDismiss}>
+            <input type="hidden" name="logId" value={log.id} />
+            <button
+              className="flex h-6 w-6 items-center justify-center rounded-md text-foreground-tertiary transition hover:bg-background-secondary hover:text-foreground-secondary"
+              aria-label="Dismiss"
+              title="Dismiss"
+            >
+              &times;
+            </button>
+          </form>
         </div>
       </div>
       <p className="mt-1 text-foreground-secondary">{log.reason}</p>
@@ -142,6 +147,12 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const isPrivate = group.visibility === "private";
+  const [optimisticLogs, removeLog] = useOptimistic(
+    moderationLogs || [],
+    (current: NonNullable<Props["moderationLogs"]>, logIdToRemove: string | null) =>
+      logIdToRemove === null ? [] : current.filter((l) => l.id !== logIdToRemove),
+  );
+  const [, startTransition] = useTransition();
 
   return (
     <section className="rounded-2xl border border-border bg-white shadow-[var(--card-shadow)]">
@@ -328,14 +339,37 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
             </div>
           </div>
 
-          {moderationLogs && moderationLogs.length > 0 ? (
+          {optimisticLogs.length > 0 ? (
             <div className="mt-6 border-t border-border pt-5">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-tertiary">
-                Moderation log
-              </h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-tertiary">
+                  Moderation log
+                </h2>
+                <form action={(formData) => {
+                  startTransition(async () => {
+                    removeLog(null);
+                    await dismissAllModerationLogsAction(formData);
+                  });
+                }}>
+                  <input type="hidden" name="groupId" value={group.id} />
+                  <button className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-foreground-secondary transition hover:border-decrease hover:text-decrease">
+                    Dismiss all
+                  </button>
+                </form>
+              </div>
               <div className="mt-3 grid max-h-[18rem] gap-2 overflow-y-auto pr-1">
-                {moderationLogs.map((log) => (
-                  <ModerationLogEntry key={log.id} log={log} members={members} />
+                {optimisticLogs.map((log) => (
+                  <ModerationLogEntry
+                    key={log.id}
+                    log={log}
+                    members={members}
+                    onDismiss={(formData) => {
+                      startTransition(async () => {
+                        removeLog(log.id);
+                        await dismissModerationLogAction(formData);
+                      });
+                    }}
+                  />
                 ))}
               </div>
             </div>

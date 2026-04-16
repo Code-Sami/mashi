@@ -225,6 +225,7 @@ export async function getMarketDetailData(marketId: string) {
     return null;
   }
 
+  const group = await GroupModel.findById(market.groupId).lean();
   const umpire = await UserModel.findById(market.umpireId).lean();
   const bets = await BetModel.find({ marketId }).sort({ createdAt: 1 }).lean();
   const users = await UserModel.find().lean();
@@ -233,6 +234,7 @@ export async function getMarketDetailData(marketId: string) {
 
   return {
     market: serializeMarket(market),
+    groupOwnerId: group?.ownerId?.toString() || null,
     umpire: umpire
       ? {
           id: umpire._id.toString(),
@@ -390,7 +392,7 @@ export async function getGroupPageData(groupId: string, userId: string) {
 
   const moderationLogs = isOwner
     ? await (async () => {
-        const logs = await ModerationLogModel.find({ groupId })
+        const logs = await ModerationLogModel.find({ groupId, dismissedAt: null })
           .sort({ createdAt: -1 })
           .limit(20)
           .lean();
