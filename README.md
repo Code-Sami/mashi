@@ -17,9 +17,11 @@ Mashi is a social prediction market web app for private friend groups. Create Ye
 - Public and private groups with invite codes
 - Join requests for private groups (approve/deny by owner)
 - Group pages with members, activity feed, active/resolved markets
-- Create markets with deadlines, tagged users, and excluded users
+- Create markets via modal dialog with deadlines, tagged users, and excluded users
 - Yes/No pooled-share trading model with price history chart
-- Umpire-only market resolution with pari-mutuel payouts
+- Two-step bet confirmation with estimated payout preview (pari-mutuel snapshot)
+- Umpire-only market resolution with two-step confirm and pari-mutuel payouts
+- Deadline enforcement: betting closes at deadline, market shows "Pending" status until umpire resolves
 - Group leaderboard ranked by net P/L and participation
 - User profiles and account settings
 
@@ -102,11 +104,16 @@ src/
       auth/[...nextauth]/route.ts
       debug-mongo/route.ts
   components/
+    bet-form.tsx             # Two-step bet form with payout preview
     create-market-form.tsx
+    create-market-modal.tsx  # Modal wrapper for market creation
     group-header.tsx
     groups-directory.tsx
     market-question-with-mentions.tsx
+    mobile-nav.tsx
     price-history-chart.tsx
+    resolve-controls.tsx     # Two-step umpire resolution controls
+    settlement-popup.tsx
     sign-out-button.tsx
   lib/
     auth.ts                 # NextAuth config (Credentials provider)
@@ -156,7 +163,7 @@ yesPrice = yesShares / (yesShares + noShares)
 noPrice  = noShares  / (yesShares + noShares)
 ```
 
-Each bet adds to the corresponding share pool and updates the price. On resolution, payouts are distributed proportionally to winning-side bettors.
+Each bet adds to the corresponding share pool and updates the price. On resolution, payouts are distributed proportionally to winning-side bettors (pari-mutuel). Before confirming a bet, users see an estimated payout based on the current pool state, with a disclaimer that the final payout changes as others bet.
 
 ## Constraints
 

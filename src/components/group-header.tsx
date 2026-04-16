@@ -5,12 +5,15 @@ import { useState } from "react";
 import {
   joinGroupAction,
   leaveGroupAction,
+  removeMemberAction,
   requestJoinGroupAction,
   updateGroupAction,
   approveJoinRequestAction,
   denyJoinRequestAction,
   deleteGroupAction,
+  overrideModerationAction,
 } from "@/app/actions";
+import { CreateMarketButton } from "@/components/create-market-modal";
 
 type Member = {
   userId: string;
@@ -40,9 +43,102 @@ type Props = {
   members: Member[];
   pendingRequests: PendingRequest[];
   infoMessage: string;
+  createMarketMembers?: { userId: string; name: string }[];
+  moderation?: {
+    rejected: boolean;
+    reason: string;
+    logId: string | null;
+    canOverride: boolean;
+  };
+  moderationLogs?: {
+    id: string;
+    question: string;
+    verdict: string;
+    reason: string;
+    userName: string;
+    createdAt: string | null;
+  }[];
 };
 
-export function GroupHeader({ group, isOwner, myPendingRequest, members, pendingRequests, infoMessage }: Props) {
+function ModerationLogEntry({ log, members }: { log: Props["moderationLogs"] extends (infer T)[] | undefined ? T : never; members: Member[] }) {
+  const [showForm, setShowForm] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const isRejected = log.verdict === "rejected";
+
+  if (hidden) return null;
+
+  return (
+    <div className="rounded-xl border border-border-light p-3 text-sm">
+      <div className="flex items-start justify-between gap-2">
+        <p className="font-medium">&ldquo;{log.question}&rdquo;</p>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className={`rounded-lg px-2 py-0.5 text-xs font-semibold ${log.verdict === "overridden" ? "bg-amber-100 text-amber-700" : "bg-decrease/10 text-decrease"}`}>
+            {log.verdict === "overridden" ? "Overridden" : "Rejected"}
+          </span>
+          <button
+            type="button"
+            onClick={() => setHidden(true)}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-foreground-tertiary transition hover:bg-background-secondary hover:text-foreground-secondary"
+            aria-label="Dismiss"
+            title="Dismiss"
+          >
+            &times;
+          </button>
+        </div>
+      </div>
+      <p className="mt-1 text-foreground-secondary">{log.reason}</p>
+      <p className="mt-1 text-xs text-foreground-tertiary">
+        By {log.userName} · {log.createdAt ? new Date(log.createdAt).toLocaleDateString() : ""}
+      </p>
+      {isRejected ? (
+        showForm ? (
+          <form action={overrideModerationAction} className="mt-3 grid gap-2 border-t border-border-light pt-3">
+            <input type="hidden" name="logId" value={log.id} />
+            <input
+              type="datetime-local"
+              name="deadline"
+              required
+              className="rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            />
+            <select
+              name="umpireId"
+              required
+              defaultValue=""
+              className="rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            >
+              <option value="" disabled>Select Umpire</option>
+              {members.map((m) => (
+                <option key={m.userId} value={m.userId}>{m.name}</option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium transition hover:bg-background-secondary"
+              >
+                Cancel
+              </button>
+              <button className="rounded-lg bg-amber-500 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-600">
+                Override &amp; create
+              </button>
+            </div>
+          </form>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="mt-2 rounded-lg bg-amber-500 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-600"
+          >
+            Approve anyway
+          </button>
+        )
+      ) : null}
+    </div>
+  );
+}
+
+export function GroupHeader({ group, isOwner, myPendingRequest, members, pendingRequests, infoMessage, createMarketMembers, moderation, moderationLogs }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const isPrivate = group.visibility === "private";
@@ -69,6 +165,9 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
         </div>
 
         <div className="flex items-center gap-2">
+          {group.isMember && createMarketMembers ? (
+            <CreateMarketButton groupId={group.id} members={createMarketMembers} moderation={moderation} />
+          ) : null}
           {!group.isMember ? (
             isPrivate ? (
               myPendingRequest ? (
@@ -113,16 +212,34 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
         <div className="border-t border-border px-4 pb-5 pt-4 sm:px-6">
           <div className="grid max-h-[20rem] gap-2 overflow-y-auto pr-1">
             {members.map((member) => (
-              <div key={member.userId} className="flex items-center gap-3 rounded-xl border border-border-light p-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand-dark">
-                  {member.initials}
+              <div key={member.userId} className="flex items-center justify-between gap-3 rounded-xl border border-border-light p-2.5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand-dark">
+                    {member.initials}
+                  </div>
+                  <div>
+                    <Link href={`/users/${member.userId}`} className="text-sm font-medium text-brand-dark hover:underline">
+                      {member.name}
+                    </Link>
+                    <p className="text-xs text-foreground-tertiary">{member.role}</p>
+                  </div>
                 </div>
-                <div>
-                  <Link href={`/users/${member.userId}`} className="text-sm font-medium text-brand-dark hover:underline">
-                    {member.name}
-                  </Link>
-                  <p className="text-xs text-foreground-tertiary">{member.role}</p>
-                </div>
+                {isOwner && member.role !== "owner" ? (
+                  <form
+                    action={removeMemberAction}
+                    onSubmit={(e) => {
+                      if (!confirm(`Remove ${member.name} from the group?`)) {
+                        e.preventDefault();
+                      }
+                    }}
+                  >
+                    <input type="hidden" name="groupId" value={group.id} />
+                    <input type="hidden" name="memberUserId" value={member.userId} />
+                    <button className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium transition hover:border-decrease hover:text-decrease">
+                      Remove
+                    </button>
+                  </form>
+                ) : null}
               </div>
             ))}
           </div>
@@ -210,6 +327,19 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
               </div>
             </div>
           </div>
+
+          {moderationLogs && moderationLogs.length > 0 ? (
+            <div className="mt-6 border-t border-border pt-5">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-tertiary">
+                Moderation log
+              </h2>
+              <div className="mt-3 grid max-h-[18rem] gap-2 overflow-y-auto pr-1">
+                {moderationLogs.map((log) => (
+                  <ModerationLogEntry key={log.id} log={log} members={members} />
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>

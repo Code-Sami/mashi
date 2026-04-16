@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { CreateMarketForm } from "@/components/create-market-form";
 import { GroupHeader } from "@/components/group-header";
 import { MarketQuestionWithMentions } from "@/components/market-question-with-mentions";
 import { getGroupPageData } from "@/lib/queries";
@@ -11,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 type PageProps = {
   params: Promise<{ groupId: string }>;
-  searchParams: Promise<{ error?: string; info?: string }>;
+  searchParams: Promise<{ error?: string; info?: string; moderation?: string; reason?: string; logId?: string; canOverride?: string }>;
 };
 
 export default async function GroupDetailPage({ params, searchParams }: PageProps) {
@@ -28,6 +27,15 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
     query.info === "request_sent" ? "Your request to join has been sent." :
     query.info === "already_requested" ? "You already have a pending request." :
     query.error === "private_group" ? "This group is private. Request to join instead." : "";
+
+  const moderation = query.moderation === "rejected"
+    ? {
+        rejected: true,
+        reason: query.reason || "This question was flagged by moderation.",
+        logId: query.logId || null,
+        canOverride: query.canOverride === "1",
+      }
+    : undefined;
 
   return (
     <div className="grid gap-6">
@@ -46,24 +54,16 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
           initials: getInitials(req.name),
         }))}
         infoMessage={infoMessage}
+        createMarketMembers={data.members.map((m) => ({
+          userId: m.userId,
+          name: m.name,
+        }))}
+        moderation={moderation}
+        moderationLogs={data.moderationLogs}
       />
 
       {canView ? (
         <>
-          {/* Create Market */}
-          {data.group.isMember ? (
-            <section className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-5">
-              <h2 className="font-semibold">Create market</h2>
-              <CreateMarketForm
-                groupId={groupId}
-                members={data.members.map((member) => ({
-                  userId: member.userId,
-                  name: member.name,
-                }))}
-              />
-            </section>
-          ) : null}
-
           {/* Row 1: Leaderboard + Active Markets */}
           <section className="grid gap-4 md:grid-cols-2">
             <article className="rounded-2xl border border-border bg-white p-5 shadow-[var(--card-shadow)]">

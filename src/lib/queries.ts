@@ -11,6 +11,7 @@ import { MarketModel } from "@/models/Market";
 import { MarketPriceHistoryModel } from "@/models/MarketPriceHistory";
 import { JoinRequestModel } from "@/models/JoinRequest";
 import { UserModel } from "@/models/User";
+import { ModerationLogModel } from "@/models/ModerationLog";
 
 function fullName(user: {
   firstName?: string;
@@ -387,6 +388,27 @@ export async function getGroupPageData(groupId: string, userId: string) {
     ? Boolean(await JoinRequestModel.exists({ groupId, userId, status: "pending" }))
     : false;
 
+  const moderationLogs = isOwner
+    ? await (async () => {
+        const logs = await ModerationLogModel.find({ groupId })
+          .sort({ createdAt: -1 })
+          .limit(20)
+          .lean();
+        if (logs.length === 0) return [];
+        const logUserIds = [...new Set(logs.map((l) => l.userId.toString()))];
+        const logUsers = await UserModel.find({ _id: { $in: logUserIds } }).lean();
+        const logUserMap = new Map(logUsers.map((u) => [u._id.toString(), u]));
+        return logs.map((l) => ({
+          id: l._id.toString(),
+          question: l.question,
+          verdict: l.verdict as string,
+          reason: l.reason,
+          userName: fullName(logUserMap.get(l.userId.toString()) || {}),
+          createdAt: l.createdAt?.toISOString() || null,
+        }));
+      })()
+    : [];
+
   return {
     group: {
       id: group._id.toString(),
@@ -415,6 +437,7 @@ export async function getGroupPageData(groupId: string, userId: string) {
     resolvedMarkets: markets
       .filter((market) => market.status === "resolved")
       .map((market) => serializeMarket(market)),
+    moderationLogs,
     activity: activities.map((item) => ({
       id: item._id.toString(),
       type: item.type,

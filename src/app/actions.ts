@@ -16,6 +16,8 @@ import { MarketModel } from "@/models/Market";
 import { MarketPriceHistoryModel } from "@/models/MarketPriceHistory";
 import { JoinRequestModel } from "@/models/JoinRequest";
 import { UserModel } from "@/models/User";
+import { ModerationLogModel } from "@/models/ModerationLog";
+import { moderateQuestion } from "@/lib/moderation";
 
 function toBaseUsername(displayName: string, email: string) {
   const fromName = displayName
@@ -154,6 +156,25 @@ export async function joinGroupAction(formData: FormData) {
   redirect(`/groups/${groupId}`);
 }
 
+export async function removeMemberAction(formData: FormData) {
+  const user = await requireAuthUser();
+  const groupId = formData.get("groupId")?.toString() || "";
+  const memberUserId = formData.get("memberUserId")?.toString() || "";
+  if (!groupId || !memberUserId) throw new Error("Missing fields.");
+
+  await connectToDatabase();
+  const group = await GroupModel.findById(groupId).lean();
+  if (!group) throw new Error("Group not found.");
+  if (group.ownerId.toString() !== user._id.toString()) {
+    throw new Error("Only the group owner can remove members.");
+  }
+  if (memberUserId === user._id.toString()) {
+    throw new Error("Owner cannot remove themselves.");
+  }
+  await GroupMemberModel.deleteOne({ groupId, userId: memberUserId });
+  revalidatePath(`/groups/${groupId}`);
+}
+
 export async function leaveGroupAction(formData: FormData) {
   const user = await requireAuthUser();
   const groupId = formData.get("groupId")?.toString() || "";
@@ -190,6 +211,25 @@ export async function createMarketAction(formData: FormData) {
   if (excludeTaggedUsers) normalizedTagged.forEach((id) => computedExcluded.add(id));
   if (excludeUmpire && validMemberIds.has(umpireId)) computedExcluded.add(umpireId);
 
+  const moderation = await moderateQuestion(question);
+  if (!moderation.allowed) {
+    const log = await ModerationLogModel.create({
+      groupId,
+      userId: user._id,
+      question,
+      verdict: "rejected",
+      reason: moderation.reason,
+    });
+    const isOwner = await GroupModel.exists({ _id: groupId, ownerId: user._id });
+    const logId = log._id.toString();
+    const reason = encodeURIComponent(moderation.reason);
+    if (isOwner) {
+      redirect(`/groups/${groupId}?moderation=rejected&reason=${reason}&logId=${logId}&canOverride=1`);
+    } else {
+      redirect(`/groups/${groupId}?moderation=rejected&reason=${reason}`);
+    }
+  }
+
   const market = await MarketModel.create({
     question,
     description: "",
@@ -223,6 +263,83 @@ export async function createMarketAction(formData: FormData) {
     source: "seed",
   });
   revalidatePath(`/groups/${groupId}`);
+  redirect(`/markets/${market._id.toString()}`);
+}
+
+export async function overrideModerationAction(formData: FormData) {
+  const user = await requireAuthUser();
+  const logId = formData.get("logId")?.toString() || "";
+  if (!logId) throw new Error("Missing moderation log ID.");
+
+  await connectToDatabase();
+  const log = await ModerationLogModel.findById(logId);
+  if (!log) throw new Error("Moderation log not found.");
+  if (log.verdict === "overridden") {
+    redirect(`/groups/${log.groupId.toString()}`);
+  }
+
+  const group = await GroupModel.findById(log.groupId).lean();
+  if (!group || group.ownerId.toString() !== user._id.toString()) {
+    throw new Error("Only the group owner can override moderation.");
+  }
+
+  const groupMemberships = await GroupMemberModel.find({ groupId: log.groupId }).lean();
+
+  const deadline = formData.get("deadline")?.toString() || "";
+  const umpireId = formData.get("umpireId")?.toString() || user._id.toString();
+  const taggedUserIds = parseUserIdList(formData, "taggedUserIds");
+  const excludeTaggedUsers = formData.get("excludeTaggedUsers")?.toString() === "on";
+  const excludeUmpire = formData.get("excludeUmpire")?.toString() === "on";
+  if (!deadline) throw new Error("Missing deadline.");
+
+  const validMemberIds = new Set(groupMemberships.map((m) => m.userId.toString()));
+  const normalizedTagged = [...new Set(taggedUserIds)].filter((id) => validMemberIds.has(id));
+  const computedExcluded = new Set<string>();
+  if (excludeTaggedUsers) normalizedTagged.forEach((id) => computedExcluded.add(id));
+  if (excludeUmpire && validMemberIds.has(umpireId)) computedExcluded.add(umpireId);
+
+  const market = await MarketModel.create({
+    question: log.question,
+    description: "",
+    deadline: new Date(deadline),
+    umpireId,
+    groupId: log.groupId,
+    taggedUserIds: normalizedTagged,
+    excludedUserIds: [...computedExcluded],
+    yesShares: 0,
+    noShares: 0,
+    totalVolume: 0,
+    status: "open",
+    outcome: null,
+  });
+
+  log.verdict = "overridden";
+  log.overriddenBy = user._id;
+  log.marketId = market._id;
+  await log.save();
+
+  await ActivityModel.create({
+    groupId: log.groupId,
+    actorUserId: user._id,
+    type: "market_created",
+    marketId: market._id,
+    metadata: {
+      question: log.question,
+      taggedUserIds: normalizedTagged,
+      excludedUserIds: [...computedExcluded],
+      moderationOverride: true,
+    },
+  });
+  await MarketPriceHistoryModel.create({
+    marketId: market._id,
+    yesPrice: 0.5,
+    noPrice: 0.5,
+    totalVolume: 0,
+    source: "seed",
+  });
+
+  const gid = log.groupId.toString();
+  revalidatePath(`/groups/${gid}`);
   redirect(`/markets/${market._id.toString()}`);
 }
 
