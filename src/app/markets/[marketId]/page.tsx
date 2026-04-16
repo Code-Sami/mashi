@@ -1,4 +1,5 @@
-import { placeBetAction, resolveMarketAction } from "@/app/actions";
+import { BetForm } from "@/components/bet-form";
+import { ResolveControls } from "@/components/resolve-controls";
 import { MarketQuestionWithMentions } from "@/components/market-question-with-mentions";
 import { PriceHistoryChart } from "@/components/price-history-chart";
 import { SettlementCard, SettlementPopup } from "@/components/settlement-popup";
@@ -33,7 +34,8 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
   );
   const canResolve = data.market.umpireId === user._id.toString();
   const isExcludedFromBetting = (data.market.excludedUserIds || []).includes(user._id.toString());
-  const canBet = data.market.status === "open" && isMember && !isExcludedFromBetting;
+  const isPastDeadline = new Date(data.market.deadline).getTime() < Date.now();
+  const canBet = data.market.status === "open" && isMember && !isExcludedFromBetting && !isPastDeadline;
   const userMap = new Map(data.users.map((u) => [u.id, u]));
   const errorMessage =
     query.error === "not_member"
@@ -78,8 +80,14 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
           <h1 className="text-xl font-bold sm:text-2xl">
             <MarketQuestionWithMentions question={data.market.question} taggedUsers={data.taggedUsers} />
           </h1>
-          <span className={`shrink-0 rounded-lg px-3 py-1 text-[0.9375rem] font-semibold ${data.market.status === "open" ? "bg-increase/10 text-increase" : "bg-foreground-tertiary/15 text-foreground-secondary"}`}>
-            {data.market.status === "open" ? "Open" : "Resolved"}
+          <span className={`shrink-0 rounded-lg px-3 py-1 text-[0.9375rem] font-semibold ${
+            data.market.status !== "open"
+              ? "bg-foreground-tertiary/15 text-foreground-secondary"
+              : isPastDeadline
+                ? "bg-amber-100 text-amber-700"
+                : "bg-increase/10 text-increase"
+          }`}>
+            {data.market.status !== "open" ? "Resolved" : isPastDeadline ? "Pending" : "Open"}
           </span>
         </div>
         {data.umpire ? (
@@ -137,60 +145,24 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
         ) : (
           <article className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6">
             <h2 className="font-semibold">Place bet</h2>
-            {errorMessage ? <p className="mt-2 rounded-xl bg-decrease/10 p-3 text-sm text-decrease">{errorMessage}</p> : null}
-            {!isMember ? (
-              <p className="mt-2 rounded-xl bg-background-secondary p-3 text-sm text-foreground-secondary">
-                You are viewing this market publicly. Join the group to place bets.
-              </p>
-            ) : null}
-            {isExcludedFromBetting ? (
-              <p className="mt-2 rounded-xl bg-decrease/10 p-3 text-sm text-decrease">
-                You are excluded from participating in this market.
-              </p>
-            ) : null}
-            <form action={placeBetAction} className="mt-3 grid gap-2">
-              <input type="hidden" name="marketId" value={data.market.id} />
-              <div className="grid grid-cols-2 gap-2">
-                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-yes/30 bg-yes-bg p-3 text-sm font-semibold text-yes has-[:checked]:border-yes has-[:checked]:shadow-sm">
-                  <input type="radio" name="side" value="yes" defaultChecked className="sr-only" disabled={!canBet} />
-                  Yes
-                </label>
-                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-no/30 bg-no-bg p-3 text-sm font-semibold text-no has-[:checked]:border-no has-[:checked]:shadow-sm">
-                  <input type="radio" name="side" value="no" className="sr-only" disabled={!canBet} />
-                  No
-                </label>
-              </div>
-              <input
-                name="amount"
-                type="number"
-                min="1"
-                max="100"
-                step="1"
-                required
-                placeholder="Amount (max $100)"
-                className="rounded-xl border border-border bg-background-secondary p-2.5 transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-                disabled={!canBet}
-              />
-              <button disabled={!canBet} className="rounded-xl bg-brand px-4 py-2.5 font-semibold text-brand-dark transition hover:bg-brand-hover disabled:bg-border disabled:text-foreground-tertiary">
-                Place bet
-              </button>
-            </form>
-            {canResolve && data.market.status === "open" ? (
-              <div className="mt-4 flex gap-2 border-t border-border-light pt-4">
-                <form action={resolveMarketAction} className="flex-1">
-                  <input type="hidden" name="marketId" value={data.market.id} />
-                  <input type="hidden" name="outcome" value="yes" />
-                  <button className="w-full rounded-xl bg-yes px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90">Resolve YES</button>
-                </form>
-                <form action={resolveMarketAction} className="flex-1">
-                  <input type="hidden" name="marketId" value={data.market.id} />
-                  <input type="hidden" name="outcome" value="no" />
-                  <button className="w-full rounded-xl bg-no px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90">Resolve NO</button>
-                </form>
-              </div>
-            ) : null}
+            <BetForm
+              marketId={data.market.id}
+              yesShares={data.market.yesShares}
+              noShares={data.market.noShares}
+              canBet={canBet}
+              errorMessage={errorMessage}
+              isMember={isMember}
+              isExcluded={isExcludedFromBetting}
+              isPastDeadline={isPastDeadline}
+            />
           </article>
         )}
+
+        {canResolve && data.market.status === "open" ? (
+          <article className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6 md:col-span-2">
+            <ResolveControls marketId={data.market.id} />
+          </article>
+        ) : null}
       </section>
 
       <section className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6">
