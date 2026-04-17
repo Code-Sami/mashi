@@ -45,6 +45,14 @@ const userSchema = new Schema(
       type: String,
       default: "",
     },
+    isBot: {
+      type: Boolean,
+      default: false,
+    },
+    botPersona: {
+      type: String,
+      default: null,
+    },
   },
   { timestamps: true }
 );

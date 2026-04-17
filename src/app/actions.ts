@@ -367,6 +367,8 @@ export async function placeBetAction(formData: FormData) {
 
   const isMember = await GroupMemberModel.exists({ groupId: market.groupId, userId: user._id });
   if (!isMember) redirect(`/markets/${marketId}?error=not_member`);
+  const umpireUser = await UserModel.findById(market.umpireId).lean();
+  if (umpireUser?.isBot) redirect(`/markets/${marketId}?error=bot_market`);
   const isExcluded = ((market.excludedUserIds || []) as Array<{ toString(): string }>).some(
     (id) => id.toString() === user._id.toString()
   );

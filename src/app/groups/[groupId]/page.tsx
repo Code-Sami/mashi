@@ -157,7 +157,10 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
                     <p className="font-medium">
                       <Link href={`/users/${item.actorUserId}`} className="text-brand-dark hover:underline">
                         {item.actorName}
-                      </Link>{" "}
+                      </Link>
+                      {item.actorIsBot ? (
+                        <span className="ml-1 inline-flex items-center rounded bg-violet-100 px-1.5 py-0.5 text-[0.625rem] font-bold uppercase leading-none text-violet-600">Bot</span>
+                      ) : null}{" "}
                       <span className="text-foreground-tertiary">·</span>{" "}
                       {item.type === "market_resolved" ? (
                         <>
@@ -189,6 +192,12 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
                         {item.metadata?.side ? `Side: ${String(item.metadata.side).toUpperCase()}` : "Bet placed"}
                         {item.metadata?.amount ? ` · Amount: $${Number(item.metadata.amount).toFixed(2)}` : ""}
                       </p>
+                    ) : null}
+                    {item.metadata?.reasoning ? (
+                      <p className="mt-1 rounded-lg bg-violet-50 px-2 py-1 text-xs italic text-violet-700">&ldquo;{String(item.metadata.reasoning)}&rdquo;</p>
+                    ) : null}
+                    {item.type === "market_resolved" && item.metadata?.evidence ? (
+                      <p className="mt-1 rounded-lg bg-blue-50 px-2 py-1 text-xs text-blue-700">{String(item.metadata.evidence)}</p>
                     ) : null}
                     <p className="text-xs text-foreground-tertiary">{new Date(item.createdAt || "").toLocaleString()}</p>
                   </div>

@@ -232,9 +232,30 @@ export async function getMarketDetailData(marketId: string) {
   const userMap = new Map(users.map((user) => [user._id.toString(), user]));
   const history = await MarketPriceHistoryModel.find({ marketId }).sort({ createdAt: 1 }).lean();
 
+  const betActivities = await ActivityModel.find({
+    marketId,
+    type: "bet_placed",
+    "metadata.reasoning": { $exists: true, $ne: "" },
+  }).lean();
+  const reasoningByUserTime = new Map(
+    betActivities.map((a) => [
+      `${a.actorUserId.toString()}_${a.createdAt?.getTime() || 0}`,
+      String(a.metadata?.reasoning || ""),
+    ]),
+  );
+
+  const resolveActivity = await ActivityModel.findOne({
+    marketId,
+    type: "market_resolved",
+    "metadata.evidence": { $exists: true, $ne: "" },
+  }).lean();
+
   return {
     market: serializeMarket(market),
     groupOwnerId: group?.ownerId?.toString() || null,
+    resolutionEvidence: resolveActivity?.metadata?.evidence
+      ? String(resolveActivity.metadata.evidence)
+      : null,
     umpire: umpire
       ? {
           id: umpire._id.toString(),
@@ -249,22 +270,37 @@ export async function getMarketDetailData(marketId: string) {
       totalVolume: point.totalVolume,
       createdAt: point.createdAt?.toISOString() || null,
     })),
-    bets: bets.map((bet) => ({
-      id: bet._id.toString(),
-      marketId: bet.marketId.toString(),
-      userId: bet.userId.toString(),
-      side: bet.side,
-      amount: bet.amount,
-      payout: (bet as typeof bet & { payout?: number }).payout ?? 0,
-      yesPriceAfter: bet.yesPriceAfter,
-      noPriceAfter: bet.noPriceAfter,
-      createdAt: bet.createdAt?.toISOString(),
-    })),
+    bets: bets.map((bet) => {
+      const betTime = bet.createdAt?.getTime() || 0;
+      const key = `${bet.userId.toString()}_${betTime}`;
+      let reasoning = reasoningByUserTime.get(key) || "";
+      if (!reasoning) {
+        for (const [k, v] of reasoningByUserTime.entries()) {
+          if (k.startsWith(bet.userId.toString()) && Math.abs(Number(k.split("_")[1]) - betTime) < 5000) {
+            reasoning = v;
+            break;
+          }
+        }
+      }
+      return {
+        id: bet._id.toString(),
+        marketId: bet.marketId.toString(),
+        userId: bet.userId.toString(),
+        side: bet.side,
+        amount: bet.amount,
+        payout: (bet as typeof bet & { payout?: number }).payout ?? 0,
+        yesPriceAfter: bet.yesPriceAfter,
+        noPriceAfter: bet.noPriceAfter,
+        createdAt: bet.createdAt?.toISOString(),
+        reasoning,
+      };
+    }),
     users: users.map((user) => ({
       id: user._id.toString(),
       name: fullName(user),
       email: user.email,
       username: user.username,
+      isBot: Boolean(user.isBot),
     })),
     taggedUsers: ((market.taggedUserIds || []) as Array<{ toString(): string }>).map((idObj) => {
       const id = idObj.toString();
@@ -428,6 +464,7 @@ export async function getGroupPageData(groupId: string, userId: string) {
         role: member.role,
         name: user ? fullName(user) : "Unknown",
         username: user ? fallbackUsername(user) : `user${member.userId.toString().slice(-6)}`,
+        isBot: Boolean(user?.isBot),
       };
     }).filter((member) => member.name !== "Unknown"),
     activeMarkets: markets
@@ -440,22 +477,22 @@ export async function getGroupPageData(groupId: string, userId: string) {
       .filter((market) => market.status === "resolved")
       .map((market) => serializeMarket(market)),
     moderationLogs,
-    activity: activities.map((item) => ({
-      id: item._id.toString(),
-      type: item.type,
-      actorUserId: item.actorUserId.toString(),
-      actorName:
-        fullName(activityActorMap.get(item.actorUserId.toString()) || {}) ||
-        fallbackUsername(
-          activityActorMap.get(item.actorUserId.toString()) || {
-            _id: item.actorUserId,
-          }
-        ),
-      marketId: item.marketId ? item.marketId.toString() : null,
-      marketTitle: item.marketId ? marketTitleById.get(item.marketId.toString()) || "this market" : null,
-      metadata: item.metadata || {},
-      createdAt: item.createdAt?.toISOString() || null,
-    })),
+    activity: activities.map((item) => {
+      const actor = activityActorMap.get(item.actorUserId.toString());
+      return {
+        id: item._id.toString(),
+        type: item.type,
+        actorUserId: item.actorUserId.toString(),
+        actorName:
+          fullName(actor || {}) ||
+          fallbackUsername(actor || { _id: item.actorUserId }),
+        actorIsBot: Boolean(actor?.isBot),
+        marketId: item.marketId ? item.marketId.toString() : null,
+        marketTitle: item.marketId ? marketTitleById.get(item.marketId.toString()) || "this market" : null,
+        metadata: item.metadata || {},
+        createdAt: item.createdAt?.toISOString() || null,
+      };
+    }),
     leaderboard,
   };
 }

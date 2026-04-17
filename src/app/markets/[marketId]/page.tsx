@@ -38,20 +38,24 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
   const hasBets = data.bets.length > 0;
   const isExcludedFromBetting = (data.market.excludedUserIds || []).includes(user._id.toString());
   const isPastDeadline = new Date(data.market.deadline).getTime() < Date.now();
-  const canBet = data.market.status === "open" && isMember && !isExcludedFromBetting && !isPastDeadline;
   const userMap = new Map(data.users.map((u) => [u.id, u]));
+  const umpireUser = userMap.get(data.market.umpireId);
+  const isBotMarket = Boolean(umpireUser?.isBot);
+  const canBet = data.market.status === "open" && isMember && !isExcludedFromBetting && !isPastDeadline && !isBotMarket;
   const errorMessage =
     query.error === "not_member"
       ? "Join this market's group before placing a bet."
       : query.error === "market_closed"
         ? "This market is closed for new bets."
-        : query.error === "excluded_user"
-          ? "You are excluded from betting in this market."
-        : query.error === "invalid_bet"
-          ? "Enter a valid side and amount to place a bet."
-          : query.error === "max_bet"
-            ? "Maximum bet amount is $100."
-            : "";
+        : query.error === "bot_market"
+          ? "This is a bot-only market. Spectate and enjoy!"
+          : query.error === "excluded_user"
+            ? "You are excluded from betting in this market."
+            : query.error === "invalid_bet"
+              ? "Enter a valid side and amount to place a bet."
+              : query.error === "max_bet"
+                ? "Maximum bet amount is $100."
+                : "";
 
   const isResolved = data.market.status === "resolved" && !!data.market.outcome;
   const showSettlementPopup = query.resolved === "true" && isResolved;
@@ -83,15 +87,20 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
           <h1 className="text-xl font-bold sm:text-2xl">
             <MarketQuestionWithMentions question={data.market.question} taggedUsers={data.taggedUsers} />
           </h1>
-          <span className={`shrink-0 rounded-lg px-3 py-1 text-[0.9375rem] font-semibold ${
-            data.market.status !== "open"
-              ? "bg-foreground-tertiary/15 text-foreground-secondary"
-              : isPastDeadline
-                ? "bg-amber-100 text-amber-700"
-                : "bg-increase/10 text-increase"
-          }`}>
-            {data.market.status !== "open" ? "Resolved" : isPastDeadline ? "Pending" : "Open"}
-          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            {isBotMarket ? (
+              <span className="rounded-lg bg-violet-100 px-3 py-1 text-[0.9375rem] font-semibold text-violet-600">Bot Arena</span>
+            ) : null}
+            <span className={`rounded-lg px-3 py-1 text-[0.9375rem] font-semibold ${
+              data.market.status !== "open"
+                ? "bg-foreground-tertiary/15 text-foreground-secondary"
+                : isPastDeadline
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-increase/10 text-increase"
+            }`}>
+              {data.market.status !== "open" ? "Resolved" : isPastDeadline ? "Pending" : "Open"}
+            </span>
+          </div>
         </div>
         {data.umpire ? (
           <p className="mt-2 text-sm text-foreground-secondary">
@@ -108,6 +117,10 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
             <span className="font-semibold">Outcome: <span className={data.market.outcome === "yes" ? "text-yes" : "text-no"}>{data.market.outcome.toUpperCase()}</span></span>
           ) : null}
         </div>
+
+        {data.resolutionEvidence ? (
+          <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700">{data.resolutionEvidence}</p>
+        ) : null}
 
         {data.excludedUsers.length > 0 ? (
           <p className="mt-1 text-sm text-foreground-secondary">
@@ -145,6 +158,19 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
             totalPool={data.market.totalVolume}
             entries={settlementEntries}
           />
+        ) : isBotMarket ? (
+          <article className="rounded-2xl border border-violet-200 bg-violet-50 p-4 shadow-[var(--card-shadow)] sm:p-6">
+            <h2 className="font-semibold text-violet-700">Spectator mode</h2>
+            <p className="mt-2 text-sm text-violet-600">This is a bot-only market. AI bots are betting against each other on real-world events. Watch the prices shift and see who wins!</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {data.bets.length > 0 ? (
+                <span className="rounded-lg bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-700">{data.bets.length} bets placed</span>
+              ) : (
+                <span className="rounded-lg bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-700">Waiting for bots...</span>
+              )}
+              <span className="rounded-lg bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-700">${data.market.totalVolume.toFixed(2)} volume</span>
+            </div>
+          </article>
         ) : (
           <article className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6">
             <h2 className="font-semibold">Place bet</h2>
@@ -201,12 +227,18 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
                     <p className="font-medium">
                       <Link href={`/users/${bet.userId}`} className="text-brand-dark hover:underline">
                         {actor?.name || "Unknown user"}
-                      </Link>{" "}
+                      </Link>
+                      {actor?.isBot ? (
+                        <span className="ml-1 inline-flex items-center rounded bg-violet-100 px-1.5 py-0.5 text-[0.625rem] font-bold uppercase leading-none text-violet-600">Bot</span>
+                      ) : null}{" "}
                       placed <span className={bet.side === "yes" ? "font-semibold text-yes" : "font-semibold text-no"}>{bet.side.toUpperCase()}</span> bet
                     </p>
                     <p className="text-foreground-secondary">
                       ${bet.amount.toFixed(2)} · Yes {(bet.yesPriceAfter * 100).toFixed(1)}% · No {(bet.noPriceAfter * 100).toFixed(1)}%
                     </p>
+                    {bet.reasoning ? (
+                      <p className="mt-1 rounded-lg bg-violet-50 px-2 py-1 text-xs italic text-violet-700">&ldquo;{bet.reasoning}&rdquo;</p>
+                    ) : null}
                     <p className="text-xs text-foreground-tertiary">{new Date(bet.createdAt || "").toLocaleString()}</p>
                   </div>
                 );
