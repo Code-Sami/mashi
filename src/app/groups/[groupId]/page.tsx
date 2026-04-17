@@ -38,7 +38,7 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
       }
     : undefined;
 
-  const isBotArena = data.group.name === "Bot Arena";
+  const isBotArena = data.group.name === "Bot Arena" || data.group.name === "LLM Arena";
 
   return (
     <div className="grid gap-6">
@@ -64,7 +64,7 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
         }))}
         moderation={moderation}
         moderationLogs={data.moderationLogs}
-        isBotArena={data.group.name === "Bot Arena"}
+        isBotArena={data.group.name === "Bot Arena" || data.group.name === "LLM Arena"}
       />
 
       {canView ? (
@@ -88,7 +88,7 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
                           {row.name}
                         </Link>
                         {row.isBot ? (
-                          <span className="inline-flex items-center rounded-full bg-violet-100 p-1 text-violet-600" title="Bot">
+                          <span className="inline-flex items-center rounded-full bg-violet-100 p-1 text-violet-600" title={row.botModel || "Bot"}>
                             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><rect x="3" y="8" width="18" height="12" rx="2" /><path strokeLinecap="round" d="M12 8V5m-4 7h.01M16 12h.01M9 16h6" /><circle cx="12" cy="5" r="1" fill="currentColor" /></svg>
                           </span>
                         ) : null}
@@ -105,7 +105,7 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
 
             <article className="rounded-2xl border border-border bg-white p-5 shadow-[var(--card-shadow)]">
               <h2 className="font-semibold">Active markets</h2>
-              <div className="mt-3 grid gap-2">
+              <div className="mt-3 grid max-h-[26rem] gap-2 overflow-y-auto pr-1">
                 {data.activeMarkets.length === 0 ? (
                   <p className="text-sm text-foreground-tertiary">No active markets yet.</p>
                 ) : null}
@@ -136,7 +136,7 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
           <section className="grid gap-4 md:grid-cols-2">
             <article className="rounded-2xl border border-border bg-white p-5 shadow-[var(--card-shadow)]">
               <h2 className="font-semibold">Resolved markets</h2>
-              <div className="mt-3 grid gap-2">
+              <div className="mt-3 grid max-h-[26rem] gap-2 overflow-y-auto pr-1">
                 {data.resolvedMarkets.length === 0 ? (
                   <p className="text-sm text-foreground-tertiary">No resolved markets yet.</p>
                 ) : null}

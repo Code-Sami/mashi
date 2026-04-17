@@ -259,6 +259,7 @@ export async function getMarketDetailData(marketId: string) {
   return {
     market: serializeMarket(market),
     groupOwnerId: group?.ownerId?.toString() || null,
+    groupName: group?.name || null,
     resolutionEvidence: resolveActivity?.metadata?.evidence
       ? String(resolveActivity.metadata.evidence)
       : null,
@@ -406,6 +407,7 @@ export async function getGroupPageData(groupId: string, userId: string) {
         betsPlaced: userBets.length,
         netPnL,
         isBot: Boolean(user.isBot),
+        botModel: (user.botModel as string) || null,
       };
     })
     .sort((a, b) => b.netPnL - a.netPnL || b.betsPlaced - a.betsPlaced);
@@ -598,6 +600,8 @@ export async function getPublicUserProfileData(userId: string) {
         .join(""),
       joinedAt: user.createdAt?.toISOString() || null,
       isBot: Boolean(user.isBot),
+      botProvider: (user.botProvider as string) || null,
+      botModel: (user.botModel as string) || null,
     },
     groups: memberships.map((membership) => {
       const group = groupMap.get(membership.groupId.toString());

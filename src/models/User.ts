@@ -53,6 +53,14 @@ const userSchema = new Schema(
       type: String,
       default: null,
     },
+    botProvider: {
+      type: String,
+      default: null,
+    },
+    botModel: {
+      type: String,
+      default: null,
+    },
   },
   { timestamps: true }
 );

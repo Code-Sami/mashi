@@ -40,8 +40,7 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
   const isExcludedFromBetting = (data.market.excludedUserIds || []).includes(user._id.toString());
   const isPastDeadline = new Date(data.market.deadline).getTime() < Date.now();
   const userMap = new Map(data.users.map((u) => [u.id, u]));
-  const umpireUser = userMap.get(data.market.umpireId);
-  const isBotMarket = Boolean(umpireUser?.isBot);
+  const isBotMarket = data.groupName === "Bot Arena" || data.groupName === "LLM Arena";
   const canBet = data.market.status === "open" && isMember && !isExcludedFromBetting && !isPastDeadline && !isBotMarket;
   const errorMessage =
     query.error === "not_member"
@@ -90,7 +89,7 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
           </h1>
           <div className="flex shrink-0 items-center gap-2">
             {isBotMarket ? (
-              <span className="rounded-lg bg-violet-100 px-3 py-1 text-[0.9375rem] font-semibold text-violet-600">Bot Arena</span>
+              <span className="rounded-lg bg-violet-100 px-3 py-1 text-[0.9375rem] font-semibold text-violet-600">AI Arena</span>
             ) : null}
             <span className={`rounded-lg px-3 py-1 text-[0.9375rem] font-semibold ${
               data.market.status !== "open"

@@ -47,7 +47,11 @@ export default async function PublicUserProfilePage({ params }: UserProfilePageP
               ) : null}
             </div>
             <p className="text-sm text-foreground-tertiary">
-              {data.user.isBot ? "AI Bot" : `Joined ${data.user.joinedAt ? new Date(data.user.joinedAt).toLocaleDateString() : "recently"}`}
+              {data.user.isBot
+                ? data.user.botModel
+                  ? `Powered by ${data.user.botModel}`
+                  : "AI Bot"
+                : `Joined ${data.user.joinedAt ? new Date(data.user.joinedAt).toLocaleDateString() : "recently"}`}
             </p>
           </div>
         </div>

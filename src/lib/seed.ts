@@ -1,5 +1,6 @@
 import "server-only";
 import { ensureBotArena } from "@/lib/bot-arena";
+import { ensureLlmArena } from "@/lib/llm-arena";
 import { connectToDatabase } from "@/lib/mongodb";
 import { hash } from "bcryptjs";
 import { getPrices } from "@/lib/market";
@@ -288,6 +289,7 @@ export async function ensureSeedData() {
   }
 
   await ensureBotArena();
+  await ensureLlmArena();
 
   hasSeeded = true;
 }

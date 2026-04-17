@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useOptimistic, useTransition } from "react";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   joinGroupAction,
   leaveGroupAction,
@@ -149,7 +149,8 @@ function ModerationLogEntry({ log, members, onDismiss }: {
 export function GroupHeader({ group, isOwner, myPendingRequest, members, pendingRequests, infoMessage, createMarketMembers, moderation, moderationLogs, isBotArena }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
-  const [tickRunning, startTickTransition] = useTransition();
+  const [tickRunning, setTickRunning] = useState(false);
+  const [tickStatus, setTickStatus] = useState("");
   const isPrivate = group.visibility === "private";
   const [optimisticLogs, removeLog] = useOptimistic(
     moderationLogs || [],
@@ -218,30 +219,63 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
           ) : null}
 
           {isOwner && isBotArena ? (
-            <form
-              action={(formData) => {
-                startTickTransition(() => triggerBotTickAction(formData));
+            <button
+              disabled={tickRunning}
+              onClick={async () => {
+                if (tickRunning) return;
+                setTickRunning(true);
+                setTickStatus("Starting…");
+                try {
+                  if (group.name === "LLM Arena") {
+                    const res = await fetch("/api/llm-tick", {
+                      headers: { Accept: "text/event-stream" },
+                    });
+                    if (!res.ok || !res.body) throw new Error("Request failed");
+                    const reader = res.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = "";
+                    while (true) {
+                      const { done, value } = await reader.read();
+                      if (done) break;
+                      buffer += decoder.decode(value, { stream: true });
+                      const lines = buffer.split("\n");
+                      buffer = lines.pop() || "";
+                      for (const line of lines) {
+                        if (line.startsWith("data: ") && !line.includes('"actions"')) {
+                          setTickStatus(line.slice(6));
+                        }
+                      }
+                    }
+                  } else {
+                    setTickStatus("Running Bot Arena…");
+                    const fd = new FormData();
+                    fd.set("groupId", group.id);
+                    await triggerBotTickAction(fd);
+                  }
+                } catch (e) {
+                  console.error("Tick error:", e);
+                  setTickStatus("Error");
+                } finally {
+                  setTickRunning(false);
+                  setTimeout(() => setTickStatus(""), 3000);
+                  window.location.reload();
+                }
               }}
+              className="flex items-center gap-1.5 rounded-xl border border-violet-300 bg-violet-50 px-3.5 py-2 text-sm font-medium text-violet-700 transition hover:bg-violet-100 disabled:opacity-50"
             >
-              <input type="hidden" name="groupId" value={group.id} />
-              <button
-                disabled={tickRunning}
-                className="flex items-center gap-1.5 rounded-xl border border-violet-300 bg-violet-50 px-3.5 py-2 text-sm font-medium text-violet-700 transition hover:bg-violet-100 disabled:opacity-50"
-              >
-                {tickRunning ? (
-                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                ) : (
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                )}
-                {tickRunning ? "Running..." : "Trigger tick"}
-              </button>
-            </form>
+              {tickRunning ? (
+                <svg className="h-4 w-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              )}
+              <span className="truncate">{tickRunning && tickStatus ? tickStatus : tickRunning ? "Running…" : "Trigger tick"}</span>
+            </button>
           ) : null}
 
           {isOwner ? (
