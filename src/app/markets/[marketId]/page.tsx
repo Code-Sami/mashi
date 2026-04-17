@@ -42,7 +42,7 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
   const isExcludedFromBetting = (data.market.excludedUserIds || []).includes(user._id.toString());
   const isPastDeadline = new Date(data.market.deadline).getTime() < Date.now();
   const userMap = new Map(data.users.map((u) => [u.id, u]));
-  const isBotMarket = data.groupName === "Bot Arena" || data.groupName === "LLM Arena";
+  const isBotMarket = data.groupName === "LLM Arena";
   const canBet = data.market.status === "open" && isMember && !isExcludedFromBetting && !isPastDeadline && !isBotMarket;
   const errorMessage =
     query.error === "not_member"

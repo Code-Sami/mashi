@@ -17,7 +17,6 @@ import {
   overrideModerationAction,
   dismissModerationLogAction,
   dismissAllModerationLogsAction,
-  triggerBotTickAction,
 } from "@/app/actions";
 import { CreateMarketButton } from "@/components/create-market-modal";
 
@@ -65,7 +64,7 @@ type Props = {
     userName: string;
     createdAt: string | null;
   }[];
-  isBotArena?: boolean;
+  isLlmArena?: boolean;
 };
 
 function ModerationLogEntry({ log, members, onDismiss }: {
@@ -146,7 +145,7 @@ function ModerationLogEntry({ log, members, onDismiss }: {
   );
 }
 
-export function GroupHeader({ group, isOwner, myPendingRequest, members, pendingRequests, infoMessage, createMarketMembers, moderation, moderationLogs, isBotArena }: Props) {
+export function GroupHeader({ group, isOwner, myPendingRequest, members, pendingRequests, infoMessage, createMarketMembers, moderation, moderationLogs, isLlmArena }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [tickRunning, setTickRunning] = useState(false);
@@ -164,7 +163,7 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:gap-4 sm:p-6">
         <div>
           <div className="flex items-center gap-3">
-            {isBotArena ? (
+            {isLlmArena ? (
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <rect x="3" y="8" width="18" height="12" rx="2" />
@@ -176,7 +175,7 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
             <h1 className="text-2xl font-bold">{group.name}</h1>
             {isPrivate ? (
               <span className="rounded-lg bg-foreground-tertiary/20 px-2 py-0.5 text-xs font-semibold text-foreground-secondary">Private</span>
-            ) : isBotArena ? (
+            ) : isLlmArena ? (
               <span className="rounded-lg bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-600">AI-Powered</span>
             ) : (
               <span className="rounded-lg bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand-dark">Public</span>
@@ -218,7 +217,7 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
             </form>
           ) : null}
 
-          {isOwner && isBotArena ? (
+          {isOwner && isLlmArena ? (
             <button
               disabled={tickRunning}
               onClick={async () => {
@@ -226,31 +225,24 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
                 setTickRunning(true);
                 setTickStatus("Starting…");
                 try {
-                  if (group.name === "LLM Arena") {
-                    const res = await fetch("/api/llm-tick", {
-                      headers: { Accept: "text/event-stream" },
-                    });
-                    if (!res.ok || !res.body) throw new Error("Request failed");
-                    const reader = res.body.getReader();
-                    const decoder = new TextDecoder();
-                    let buffer = "";
-                    while (true) {
-                      const { done, value } = await reader.read();
-                      if (done) break;
-                      buffer += decoder.decode(value, { stream: true });
-                      const lines = buffer.split("\n");
-                      buffer = lines.pop() || "";
-                      for (const line of lines) {
-                        if (line.startsWith("data: ") && !line.includes('"actions"')) {
-                          setTickStatus(line.slice(6));
-                        }
+                  const res = await fetch("/api/llm-tick", {
+                    headers: { Accept: "text/event-stream" },
+                  });
+                  if (!res.ok || !res.body) throw new Error("Request failed");
+                  const reader = res.body.getReader();
+                  const decoder = new TextDecoder();
+                  let buffer = "";
+                  while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split("\n");
+                    buffer = lines.pop() || "";
+                    for (const line of lines) {
+                      if (line.startsWith("data: ") && !line.includes('"actions"')) {
+                        setTickStatus(line.slice(6));
                       }
                     }
-                  } else {
-                    setTickStatus("Running Bot Arena…");
-                    const fd = new FormData();
-                    fd.set("groupId", group.id);
-                    await triggerBotTickAction(fd);
                   }
                 } catch (e) {
                   console.error("Tick error:", e);

@@ -12,8 +12,6 @@ export const maxDuration = 300;
 function isTokenAuthorized(request: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret && request.headers.get("authorization") === `Bearer ${cronSecret}`) return true;
-  const tickSecret = process.env.BOT_TICK_SECRET;
-  if (tickSecret && request.headers.get("authorization") === `Bearer ${tickSecret}`) return true;
   return false;
 }
 

@@ -104,7 +104,7 @@ export function GroupsDirectory({ groups }: { groups: GroupEntry[] }) {
                 <div>
                   <div className="flex items-center gap-1.5">
                     {group.visibility === "private" ? <LockIcon /> : null}
-                    {group.name === "Bot Arena" || group.name === "LLM Arena" ? (
+                    {group.name === "LLM Arena" ? (
                       <span className="inline-flex items-center rounded-full bg-violet-100 p-1 text-violet-600" title={group.name}>
                         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <rect x="3" y="8" width="18" height="12" rx="2" />

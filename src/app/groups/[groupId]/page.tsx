@@ -39,7 +39,7 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
       }
     : undefined;
 
-  const isBotArena = data.group.name === "Bot Arena" || data.group.name === "LLM Arena";
+  const isLlmArena = data.group.name === "LLM Arena";
 
   return (
     <div className="grid gap-6">
@@ -65,7 +65,7 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
         }))}
         moderation={moderation}
         moderationLogs={data.moderationLogs}
-        isBotArena={data.group.name === "Bot Arena" || data.group.name === "LLM Arena"}
+        isLlmArena={data.group.name === "LLM Arena"}
       />
 
       {canView ? (
@@ -76,7 +76,7 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
               <h2 className="font-semibold">Leaderboard</h2>
               <div className="mt-3 grid max-h-[26rem] gap-2 overflow-y-auto pr-1 text-sm">
                 {(() => {
-                  const rows = isBotArena ? data.leaderboard.filter((r) => r.isBot) : data.leaderboard;
+                  const rows = isLlmArena ? data.leaderboard.filter((r) => r.isBot) : data.leaderboard;
                   return rows.length === 0 ? (
                     <p className="text-sm text-foreground-tertiary">No bets placed yet.</p>
                   ) : rows.map((row, index) => (

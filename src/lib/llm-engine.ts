@@ -4,7 +4,6 @@ import { GoogleGenAI } from "@google/genai";
 import { connectToDatabase } from "@/lib/mongodb";
 import { getPrices } from "@/lib/market";
 import { getLlmArenaData, type LlmProvider } from "@/lib/llm-arena";
-import { extractJson, isDuplicateQuestion } from "@/lib/bot-engine";
 import { ActivityModel } from "@/models/Activity";
 import { BetModel } from "@/models/Bet";
 import { MarketModel } from "@/models/Market";
@@ -12,6 +11,46 @@ import { MarketPriceHistoryModel } from "@/models/MarketPriceHistory";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+function extractJson(text: string): unknown | null {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const raw = fenced ? fenced[1].trim() : text.trim();
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return null;
+  try {
+    return JSON.parse(jsonMatch[0]);
+  } catch {
+    return null;
+  }
+}
+
+async function isDuplicateQuestion(newQ: string, existingQuestions: string[]): Promise<boolean> {
+  if (existingQuestions.length === 0) return false;
+  const exact = newQ.toLowerCase().trim();
+  if (existingQuestions.some((q) => q.toLowerCase().trim() === exact)) return true;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0,
+      messages: [{
+        role: "user",
+        content: `Is this new prediction market question essentially a duplicate of any existing question? Two questions are duplicates ONLY if they are asking about the same specific event/outcome (same teams, same metric, same timeframe). Different sports, different teams, different metrics, or different dates are NOT duplicates.
+
+New question: "${newQ}"
+
+Existing questions:
+${existingQuestions.map((q, i) => `${i + 1}. "${q}"`).join("\n")}
+
+Respond with ONLY "yes" or "no".`,
+      }],
+    });
+    const answer = response.choices[0]?.message?.content?.trim().toLowerCase() || "";
+    return answer.startsWith("yes");
+  } catch {
+    return false;
+  }
+}
 
 const MARKET_CREATION_PROMPT = `You are {botName}, an AI model competing in a prediction market arena against other LLMs.
 

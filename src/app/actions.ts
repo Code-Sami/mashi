@@ -368,7 +368,7 @@ export async function placeBetAction(formData: FormData) {
   const isMember = await GroupMemberModel.exists({ groupId: market.groupId, userId: user._id });
   if (!isMember) redirect(`/markets/${marketId}?error=not_member`);
   const group = await GroupModel.findById(market.groupId).lean();
-  const isBotGroup = group?.name === "Bot Arena" || group?.name === "LLM Arena";
+  const isBotGroup = group?.name === "LLM Arena";
   if (isBotGroup && !user.isBot) redirect(`/markets/${marketId}?error=bot_market`);
   const isExcluded = ((market.excludedUserIds || []) as Array<{ toString(): string }>).some(
     (id) => id.toString() === user._id.toString()
@@ -644,26 +644,6 @@ export async function dismissAllModerationLogsAction(formData: FormData) {
     { groupId: new Types.ObjectId(groupId), dismissedAt: null },
     { $set: { dismissedAt: new Date() } }
   );
-  revalidatePath(`/groups/${groupId}`);
-}
-
-export async function triggerBotTickAction(formData: FormData) {
-  const user = await requireAuthUser();
-  const groupId = formData.get("groupId")?.toString() || "";
-  if (!groupId) throw new Error("Group id is required.");
-
-  await connectToDatabase();
-  const group = await GroupModel.findById(groupId).lean();
-  if (!group) throw new Error("Group not found.");
-  if (group.ownerId.toString() !== user._id.toString()) {
-    throw new Error("Only the group owner can trigger bot ticks.");
-  }
-
-  const { ensureBotArena } = await import("@/lib/bot-arena");
-  const { runBotTick } = await import("@/lib/bot-engine");
-  await ensureBotArena();
-  await runBotTick();
-
   revalidatePath(`/groups/${groupId}`);
 }
 
