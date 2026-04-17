@@ -90,7 +90,7 @@ Your previous bets: {previousBets}
 Choose the market where you have the best information edge, then place your bet. You are competing to have the best P&L. Bet wisely and explain your reasoning with data.
 
 Respond with JSON only:
-{"action": "bet", "marketIndex": <0-based index of chosen market>, "side": "yes" or "no", "amount": <number 5-50>, "reasoning": "1-2 sentence explanation referencing your research"}
+{"action": "bet", "marketIndex": <0-based index of chosen market>, "side": "yes" or "no", "amount": <number 1-100>, "reasoning": "1-2 sentence explanation referencing your research"}
 Only pass if you literally cannot form an opinion on ANY market:
 {"action": "pass", "reasoning": "1 sentence why you're passing"}`;
 
