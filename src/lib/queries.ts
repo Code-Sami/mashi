@@ -585,6 +585,7 @@ export async function getPublicUserProfileData(userId: string) {
         .map((part) => part[0]?.toUpperCase() || "")
         .join(""),
       joinedAt: user.createdAt?.toISOString() || null,
+      isBot: Boolean(user.isBot),
     },
     groups: memberships.map((membership) => {
       const group = groupMap.get(membership.groupId.toString());

@@ -34,9 +34,20 @@ export default async function PublicUserProfilePage({ params }: UserProfilePageP
             {getInitials(data.user.name)}
           </div>
           <div>
-            <h1 className="text-2xl font-bold">{data.user.name}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">{data.user.name}</h1>
+              {data.user.isBot ? (
+                <span className="inline-flex items-center rounded-full bg-violet-100 p-1.5 text-violet-600" title="Bot">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <rect x="3" y="8" width="18" height="12" rx="2" />
+                    <path strokeLinecap="round" d="M12 8V5m-4 7h.01M16 12h.01M9 16h6" />
+                    <circle cx="12" cy="5" r="1" fill="currentColor" />
+                  </svg>
+                </span>
+              ) : null}
+            </div>
             <p className="text-sm text-foreground-tertiary">
-              Joined {data.user.joinedAt ? new Date(data.user.joinedAt).toLocaleDateString() : "recently"}
+              {data.user.isBot ? "AI Bot" : `Joined ${data.user.joinedAt ? new Date(data.user.joinedAt).toLocaleDateString() : "recently"}`}
             </p>
           </div>
         </div>
