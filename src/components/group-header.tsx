@@ -15,6 +15,7 @@ import {
   overrideModerationAction,
   dismissModerationLogAction,
   dismissAllModerationLogsAction,
+  triggerBotTickAction,
 } from "@/app/actions";
 import { CreateMarketButton } from "@/components/create-market-modal";
 
@@ -23,6 +24,7 @@ type Member = {
   name: string;
   role: string;
   initials: string;
+  isBot?: boolean;
 };
 
 type PendingRequest = {
@@ -61,6 +63,7 @@ type Props = {
     userName: string;
     createdAt: string | null;
   }[];
+  isBotArena?: boolean;
 };
 
 function ModerationLogEntry({ log, members, onDismiss }: {
@@ -143,9 +146,10 @@ function ModerationLogEntry({ log, members, onDismiss }: {
   );
 }
 
-export function GroupHeader({ group, isOwner, myPendingRequest, members, pendingRequests, infoMessage, createMarketMembers, moderation, moderationLogs }: Props) {
+export function GroupHeader({ group, isOwner, myPendingRequest, members, pendingRequests, infoMessage, createMarketMembers, moderation, moderationLogs, isBotArena }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
+  const [tickRunning, startTickTransition] = useTransition();
   const isPrivate = group.visibility === "private";
   const [optimisticLogs, removeLog] = useOptimistic(
     moderationLogs || [],
@@ -159,9 +163,20 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:gap-4 sm:p-6">
         <div>
           <div className="flex items-center gap-3">
+            {isBotArena ? (
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <rect x="3" y="8" width="18" height="12" rx="2" />
+                  <path strokeLinecap="round" d="M12 8V5m-4 7h.01M16 12h.01M9 16h6" />
+                  <circle cx="12" cy="5" r="1" fill="currentColor" />
+                </svg>
+              </span>
+            ) : null}
             <h1 className="text-2xl font-bold">{group.name}</h1>
             {isPrivate ? (
               <span className="rounded-lg bg-foreground-tertiary/20 px-2 py-0.5 text-xs font-semibold text-foreground-secondary">Private</span>
+            ) : isBotArena ? (
+              <span className="rounded-lg bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-600">AI-Powered</span>
             ) : (
               <span className="rounded-lg bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand-dark">Public</span>
             )}
@@ -202,6 +217,33 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
             </form>
           ) : null}
 
+          {isOwner && isBotArena ? (
+            <form
+              action={(formData) => {
+                startTickTransition(() => triggerBotTickAction(formData));
+              }}
+            >
+              <input type="hidden" name="groupId" value={group.id} />
+              <button
+                disabled={tickRunning}
+                className="flex items-center gap-1.5 rounded-xl border border-violet-300 bg-violet-50 px-3.5 py-2 text-sm font-medium text-violet-700 transition hover:bg-violet-100 disabled:opacity-50"
+              >
+                {tickRunning ? (
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+                {tickRunning ? "Running..." : "Trigger tick"}
+              </button>
+            </form>
+          ) : null}
+
           {isOwner ? (
             <button
               type="button"
@@ -225,13 +267,24 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
             {members.map((member) => (
               <div key={member.userId} className="flex items-center justify-between gap-3 rounded-xl border border-border-light p-2.5">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand-dark">
-                    {member.initials}
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${member.isBot ? "bg-violet-100 text-violet-600" : "bg-brand/10 text-brand-dark"}`}>
+                    {member.isBot ? (
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <rect x="3" y="8" width="18" height="12" rx="2" />
+                        <path strokeLinecap="round" d="M12 8V5m-4 7h.01M16 12h.01M9 16h6" />
+                        <circle cx="12" cy="5" r="1" fill="currentColor" />
+                      </svg>
+                    ) : member.initials}
                   </div>
                   <div>
-                    <Link href={`/users/${member.userId}`} className="text-sm font-medium text-brand-dark hover:underline">
-                      {member.name}
-                    </Link>
+                    <div className="flex items-center gap-1.5">
+                      <Link href={`/users/${member.userId}`} className="text-sm font-medium text-brand-dark hover:underline">
+                        {member.name}
+                      </Link>
+                      {member.isBot ? (
+                        <span className="inline-flex items-center rounded bg-violet-100 px-1.5 py-0.5 text-[0.625rem] font-bold uppercase leading-none text-violet-600">Bot</span>
+                      ) : null}
+                    </div>
                     <p className="text-xs text-foreground-tertiary">{member.role}</p>
                   </div>
                 </div>

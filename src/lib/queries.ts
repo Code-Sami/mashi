@@ -393,6 +393,7 @@ export async function getGroupPageData(groupId: string, userId: string) {
         username: fallbackUsername(user),
         betsPlaced: userBets.length,
         netPnL,
+        isBot: Boolean(user.isBot),
       };
     })
     .sort((a, b) => b.netPnL - a.netPnL || b.betsPlaced - a.betsPlaced);

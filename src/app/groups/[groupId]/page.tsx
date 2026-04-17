@@ -37,6 +37,8 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
       }
     : undefined;
 
+  const isBotArena = data.group.name === "Bot Arena";
+
   return (
     <div className="grid gap-6">
       <GroupHeader
@@ -48,6 +50,7 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
           name: m.name,
           role: m.role,
           initials: getInitials(m.name),
+          isBot: m.isBot,
         }))}
         pendingRequests={data.pendingRequests.map((req) => ({
           ...req,
@@ -60,6 +63,7 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
         }))}
         moderation={moderation}
         moderationLogs={data.moderationLogs}
+        isBotArena={data.group.name === "Bot Arena"}
       />
 
       {canView ? (
@@ -69,25 +73,33 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
             <article className="rounded-2xl border border-border bg-white p-5 shadow-[var(--card-shadow)]">
               <h2 className="font-semibold">Leaderboard</h2>
               <div className="mt-3 grid max-h-[26rem] gap-2 overflow-y-auto pr-1 text-sm">
-                {data.leaderboard.length === 0 ? (
-                  <p className="text-sm text-foreground-tertiary">No bets placed yet.</p>
-                ) : null}
-                {data.leaderboard.map((row, index) => (
-                  <div key={row.userId} className="flex items-center justify-between rounded-xl border border-border-light p-3">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand-dark">
-                        {index + 1}
-                      </span>
-                      <Link href={`/users/${row.userId}`} className="font-medium text-brand-dark hover:underline">
-                        {row.name}
-                      </Link>
+                {(() => {
+                  const rows = isBotArena ? data.leaderboard.filter((r) => r.isBot) : data.leaderboard;
+                  return rows.length === 0 ? (
+                    <p className="text-sm text-foreground-tertiary">No bets placed yet.</p>
+                  ) : rows.map((row, index) => (
+                    <div key={row.userId} className="flex items-center justify-between rounded-xl border border-border-light p-3">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand-dark">
+                          {index + 1}
+                        </span>
+                        <Link href={`/users/${row.userId}`} className="font-medium text-brand-dark hover:underline">
+                          {row.name}
+                        </Link>
+                        {row.isBot ? (
+                          <span className="inline-flex items-center rounded bg-violet-100 px-1.5 py-0.5 text-[0.625rem] font-bold uppercase leading-none text-violet-600">
+                            <svg className="mr-0.5 h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714a2.25 2.25 0 0 0 .659 1.591L19 14.5M14.25 3.104c.251.023.501.05.75.082M19 14.5l-2.47 2.47a3.121 3.121 0 0 1-4.06 0L10 14.5" /></svg>
+                            Bot
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="text-right">
+                        <p className={`font-semibold ${row.netPnL >= 0 ? "text-increase" : "text-decrease"}`}>{row.netPnL >= 0 ? "+" : ""}${row.netPnL.toFixed(2)}</p>
+                        <p className="text-xs text-foreground-tertiary">{row.betsPlaced} bets</p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className={`font-semibold ${row.netPnL >= 0 ? "text-increase" : "text-decrease"}`}>{row.netPnL >= 0 ? "+" : ""}${row.netPnL.toFixed(2)}</p>
-                      <p className="text-xs text-foreground-tertiary">{row.betsPlaced} bets</p>
-                    </div>
-                  </div>
-                ))}
+                  ));
+                })()}
               </div>
             </article>
 
@@ -159,7 +171,10 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
                         {item.actorName}
                       </Link>
                       {item.actorIsBot ? (
-                        <span className="ml-1 inline-flex items-center rounded bg-violet-100 px-1.5 py-0.5 text-[0.625rem] font-bold uppercase leading-none text-violet-600">Bot</span>
+                        <span className="ml-1 inline-flex items-center gap-0.5 rounded bg-violet-100 px-1.5 py-0.5 text-[0.625rem] font-bold uppercase leading-none text-violet-600">
+                          <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><rect x="3" y="8" width="18" height="12" rx="2" /><path strokeLinecap="round" d="M12 8V5m-4 7h.01M16 12h.01M9 16h6" /><circle cx="12" cy="5" r="1" fill="currentColor" /></svg>
+                          Bot
+                        </span>
                       ) : null}{" "}
                       <span className="text-foreground-tertiary">·</span>{" "}
                       {item.type === "market_resolved" ? (

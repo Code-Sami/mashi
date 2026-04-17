@@ -646,6 +646,26 @@ export async function dismissAllModerationLogsAction(formData: FormData) {
   revalidatePath(`/groups/${groupId}`);
 }
 
+export async function triggerBotTickAction(formData: FormData) {
+  const user = await requireAuthUser();
+  const groupId = formData.get("groupId")?.toString() || "";
+  if (!groupId) throw new Error("Group id is required.");
+
+  await connectToDatabase();
+  const group = await GroupModel.findById(groupId).lean();
+  if (!group) throw new Error("Group not found.");
+  if (group.ownerId.toString() !== user._id.toString()) {
+    throw new Error("Only the group owner can trigger bot ticks.");
+  }
+
+  const { ensureBotArena } = await import("@/lib/bot-arena");
+  const { runBotTick } = await import("@/lib/bot-engine");
+  await ensureBotArena();
+  await runBotTick();
+
+  revalidatePath(`/groups/${groupId}`);
+}
+
 export async function updateProfileAction(formData: FormData) {
   const user = await requireAuthUser();
   const firstName = formData.get("firstName")?.toString().trim() || "";

@@ -10,25 +10,25 @@ import { MarketPriceHistoryModel } from "@/models/MarketPriceHistory";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const MARKET_CREATION_PROMPT = `You are a market creator for a prediction market app. Your job is to create interesting, real-world Yes/No betting questions.
+const MARKET_CREATION_PROMPT = `You are {botName}, creating a prediction market question based on YOUR interests and expertise.
 
-IMPORTANT: Search the web FIRST to find current news, prices, weather forecasts, and events. Then create a question based on what you find. The question should be close to a coin-flip — not something obviously true or false.
+{persona}
 
-Good examples based on real research:
-- If Bitcoin is currently ~$84,000, ask "Will Bitcoin be above $84,500 at 5pm ET tomorrow?" (close to current price)
-- If weather forecast says 40% chance of rain, ask "Will it rain in New Haven, CT tomorrow?"
-- If a game is scheduled, ask "Will [team] win against [opponent] tomorrow?"
-- If a stock had a big move today, ask about tomorrow's direction
+IMPORTANT: Search the web using your trusted sources FIRST. Find current news, prices, forecasts, scores, or events in YOUR area of interest. Then create a compelling Yes/No question that other bettors will want to argue about.
 
 Rules:
 - Search the web for CURRENT data before creating the question
+- Create a question in YOUR area of expertise (sports, weather, finance, pop culture, etc.)
 - The question MUST be objectively verifiable within 24-48 hours
-- Set thresholds near current values so the outcome is uncertain
+- Set thresholds near current values so the outcome is genuinely uncertain (close to 50/50)
 - Include specific numbers, locations, dates, and times
+- Make it spicy — something that will create disagreement
 - Use "tomorrow" relative to today's date: {today}
 
-Here are the markets already open (avoid duplicating):
+Here are recent markets (open AND resolved) — do NOT create anything similar:
 {existingMarkets}
+
+You MUST create a COMPLETELY DIFFERENT topic from all of the above. If you can't think of something new, respond with {"skip": true}.
 
 Respond with JSON only:
 {"question": "...", "deadlineHours": 24}
@@ -48,11 +48,11 @@ Deadline: {deadline}
 Your previous bets on this market: {previousBets}
 Other bots' recent bets: {recentBets}
 
-After researching, decide whether to place a bet. Your reasoning should reference what you found.
+After researching, place your bet. You LOVE betting and almost never pass. Stay in character — your reasoning should reflect your personality, reference your research, and throw shade at bots who would disagree with you.
 
 Respond with JSON only:
-{"action": "bet", "side": "yes" or "no", "amount": <number 5-50>, "reasoning": "1-2 sentence explanation in character, referencing your research"}
-or
+{"action": "bet", "side": "yes" or "no", "amount": <number 5-50>, "reasoning": "1-2 sentence explanation in character, referencing your research and dissing the opposition"}
+Only pass if you literally cannot form an opinion:
 {"action": "pass", "reasoning": "1 sentence why you're passing"}`;
 
 const RESOLUTION_PROMPT = `A prediction market needs to be resolved. Search the web to determine the factual outcome.
@@ -67,12 +67,44 @@ Respond with JSON only:
 or if you genuinely cannot determine the result:
 {"outcome": null, "evidence": "explanation of why it's unclear"}`;
 
-function extractJson(text: string): unknown {
+async function isDuplicateQuestion(newQ: string, existingQuestions: string[]): Promise<boolean> {
+  if (existingQuestions.length === 0) return false;
+  const exact = newQ.toLowerCase().trim();
+  if (existingQuestions.some((q) => q.toLowerCase().trim() === exact)) return true;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0,
+      messages: [{
+        role: "user",
+        content: `Is this new prediction market question essentially a duplicate of any existing question? Two questions are duplicates ONLY if they are asking about the same specific event/outcome (same teams, same metric, same timeframe). Different sports, different teams, different metrics, or different dates are NOT duplicates.
+
+New question: "${newQ}"
+
+Existing questions:
+${existingQuestions.map((q, i) => `${i + 1}. "${q}"`).join("\n")}
+
+Respond with ONLY "yes" or "no".`,
+      }],
+    });
+    const answer = response.choices[0]?.message?.content?.trim().toLowerCase() || "";
+    return answer.startsWith("yes");
+  } catch {
+    return false;
+  }
+}
+
+function extractJson(text: string): unknown | null {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const raw = fenced ? fenced[1].trim() : text.trim();
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("No JSON object found");
-  return JSON.parse(jsonMatch[0]);
+  if (!jsonMatch) return null;
+  try {
+    return JSON.parse(jsonMatch[0]);
+  } catch {
+    return null;
+  }
 }
 
 async function webSearchCall(prompt: string): Promise<string | null> {
@@ -110,13 +142,17 @@ export async function runBotTick(): Promise<TickResult> {
     if (result) return result;
   }
 
-  // Phase 2: Maybe create a new market (if fewer than 3 open, ~30% chance)
+  // Phase 2: Create a new market (if fewer than 4 open, 50% chance)
   const activeMarkets = openMarkets.filter(
     (m) => new Date(m.deadline).getTime() > Date.now(),
   );
-  if (activeMarkets.length < 3 && Math.random() < 0.3) {
+  if (activeMarkets.length < 4 && Math.random() < 0.5) {
+    const recentMarkets = await MarketModel.find({ groupId })
+      .sort({ createdAt: -1 })
+      .limit(30)
+      .lean();
     const creator = botUsers[Math.floor(Math.random() * botUsers.length)];
-    const result = await createMarketWithAI(group, creator, activeMarkets);
+    const result = await createMarketWithAI(group, creator, recentMarkets);
     if (result) return result;
   }
 
@@ -132,7 +168,7 @@ export async function runBotTick(): Promise<TickResult> {
 
 async function createMarketWithAI(
   group: { _id: { toString(): string } },
-  creator: { _id: { toString(): string }; botPersona?: string },
+  creator: { _id: { toString(): string }; botPersona?: string; displayName?: string; name?: string },
   existingMarkets: Array<{ question: string }>,
 ): Promise<TickResult | null> {
   try {
@@ -142,15 +178,23 @@ async function createMarketWithAI(
       month: "long",
       day: "numeric",
     });
+    const creatorName = creator.displayName || creator.name || "Bot";
     const prompt = MARKET_CREATION_PROMPT
+      .replace("{botName}", creatorName)
+      .replace("{persona}", creator.botPersona || "You are a prediction market bot.")
       .replace("{existingMarkets}", existingMarkets.map((m) => `- ${m.question}`).join("\n") || "None")
       .replace("{today}", today);
 
     const content = await webSearchCall(prompt);
     if (!content) return null;
 
-    const parsed = extractJson(content) as { skip?: boolean; question?: string; deadlineHours?: number };
-    if (parsed.skip || !parsed.question) return null;
+    const parsed = extractJson(content) as { skip?: boolean; question?: string; deadlineHours?: number } | null;
+    if (!parsed || parsed.skip || !parsed.question) return null;
+
+    if (await isDuplicateQuestion(parsed.question, existingMarkets.map((m) => m.question))) {
+      console.log("Bot skipped duplicate question:", parsed.question);
+      return null;
+    }
 
     const deadlineHours = Math.min(Math.max(parsed.deadlineHours || 24, 12), 48);
     const deadline = new Date(Date.now() + deadlineHours * 60 * 60 * 1000);
@@ -252,9 +296,9 @@ async function placeBetWithAI(
     const content = await webSearchCall(prompt);
     if (!content) return { action: "passed", detail: `${botName}: no response` };
 
-    const parsed = extractJson(content) as { action: string; side?: string; amount?: number; reasoning?: string };
-    if (parsed.action === "pass") {
-      return { action: "passed", detail: `${botName} passed: ${parsed.reasoning}` };
+    const parsed = extractJson(content) as { action: string; side?: string; amount?: number; reasoning?: string } | null;
+    if (!parsed || parsed.action === "pass") {
+      return { action: "passed", detail: `${botName} passed: ${parsed?.reasoning || "no valid response"}` };
     }
 
     const side = parsed.side === "no" ? "no" : "yes";
@@ -329,9 +373,8 @@ async function resolveMarketWithAI(
     const content = await webSearchCall(prompt);
     if (!content) return null;
 
-    const parsed = extractJson(content) as { outcome: string | null; evidence?: string };
-
-    if (parsed.outcome !== "yes" && parsed.outcome !== "no") return null;
+    const parsed = extractJson(content) as { outcome: string | null; evidence?: string } | null;
+    if (!parsed || (parsed.outcome !== "yes" && parsed.outcome !== "no")) return null;
 
     const liveMarket = await MarketModel.findById(market._id);
     if (!liveMarket || liveMarket.status === "resolved") return null;
