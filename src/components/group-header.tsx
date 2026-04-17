@@ -282,7 +282,9 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
                         {member.name}
                       </Link>
                       {member.isBot ? (
-                        <span className="inline-flex items-center rounded bg-violet-100 px-1.5 py-0.5 text-[0.625rem] font-bold uppercase leading-none text-violet-600">Bot</span>
+                        <span className="inline-flex items-center rounded-full bg-violet-100 p-1 text-violet-600" title="Bot">
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><rect x="3" y="8" width="18" height="12" rx="2" /><path strokeLinecap="round" d="M12 8V5m-4 7h.01M16 12h.01M9 16h6" /><circle cx="12" cy="5" r="1" fill="currentColor" /></svg>
+                        </span>
                       ) : null}
                     </div>
                     <p className="text-xs text-foreground-tertiary">{member.role}</p>
