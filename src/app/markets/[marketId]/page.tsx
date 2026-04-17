@@ -1,4 +1,5 @@
 import { BetForm } from "@/components/bet-form";
+import { BotText } from "@/components/bot-text";
 import { DeleteMarketButton } from "@/components/delete-market-button";
 import { ResolveControls } from "@/components/resolve-controls";
 import { MarketQuestionWithMentions } from "@/components/market-question-with-mentions";
@@ -102,14 +103,24 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
             </span>
           </div>
         </div>
-        {data.umpire ? (
-          <p className="mt-2 text-sm text-foreground-secondary">
-            Umpire:{" "}
-            <Link href={`/users/${data.umpire.id}`} className="font-medium text-brand-dark hover:underline">
-              {data.umpire.name}
-            </Link>
-          </p>
-        ) : null}
+        <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-foreground-secondary">
+          {data.creator ? (
+            <span>
+              Creator:{" "}
+              <Link href={`/users/${data.creator.id}`} className="font-medium text-brand-dark hover:underline">
+                {data.creator.name}
+              </Link>
+            </span>
+          ) : null}
+          {data.umpire ? (
+            <span>
+              Umpire:{" "}
+              <Link href={`/users/${data.umpire.id}`} className="font-medium text-brand-dark hover:underline">
+                {data.umpire.name}
+              </Link>
+            </span>
+          ) : null}
+        </p>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-foreground-secondary">
           <span>Deadline: {new Date(data.market.deadline).toLocaleString()}</span>
           <span>${data.market.totalVolume.toFixed(2)} volume</span>
@@ -119,7 +130,7 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
         </div>
 
         {data.resolutionEvidence ? (
-          <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700">{data.resolutionEvidence}</p>
+          <p className="mt-2 break-words rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700"><BotText text={data.resolutionEvidence} /></p>
         ) : null}
 
         {data.excludedUsers.length > 0 ? (
@@ -239,7 +250,7 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
                       ${bet.amount.toFixed(2)} · Yes {(bet.yesPriceAfter * 100).toFixed(1)}% · No {(bet.noPriceAfter * 100).toFixed(1)}%
                     </p>
                     {bet.reasoning ? (
-                      <p className="mt-1 rounded-lg bg-violet-50 px-2 py-1 text-xs italic text-violet-700">&ldquo;{bet.reasoning}&rdquo;</p>
+                      <p className="mt-1 break-words rounded-lg bg-violet-50 px-2 py-1 text-xs italic text-violet-700">&ldquo;<BotText text={bet.reasoning} />&rdquo;</p>
                     ) : null}
                     <p className="text-xs text-foreground-tertiary">{new Date(bet.createdAt || "").toLocaleString()}</p>
                   </div>

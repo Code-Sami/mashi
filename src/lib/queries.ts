@@ -250,11 +250,23 @@ export async function getMarketDetailData(marketId: string) {
     "metadata.evidence": { $exists: true, $ne: "" },
   }).lean();
 
+  const createActivity = await ActivityModel.findOne({
+    marketId,
+    type: "market_created",
+  }).lean();
+  const creatorUser = createActivity ? userMap.get(createActivity.actorUserId.toString()) : null;
+
   return {
     market: serializeMarket(market),
     groupOwnerId: group?.ownerId?.toString() || null,
     resolutionEvidence: resolveActivity?.metadata?.evidence
       ? String(resolveActivity.metadata.evidence)
+      : null,
+    creator: creatorUser
+      ? {
+          id: createActivity!.actorUserId.toString(),
+          name: fullName(creatorUser),
+        }
       : null,
     umpire: umpire
       ? {

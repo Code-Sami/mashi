@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BotText } from "@/components/bot-text";
 import { GroupHeader } from "@/components/group-header";
 import { MarketQuestionWithMentions } from "@/components/market-question-with-mentions";
 import { getGroupPageData } from "@/lib/queries";
@@ -207,10 +208,10 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
                       </p>
                     ) : null}
                     {item.metadata?.reasoning ? (
-                      <p className="mt-1 rounded-lg bg-violet-50 px-2 py-1 text-xs italic text-violet-700">&ldquo;{String(item.metadata.reasoning)}&rdquo;</p>
+                      <p className="mt-1 break-words rounded-lg bg-violet-50 px-2 py-1 text-xs italic text-violet-700">&ldquo;<BotText text={String(item.metadata.reasoning)} />&rdquo;</p>
                     ) : null}
                     {item.type === "market_resolved" && item.metadata?.evidence ? (
-                      <p className="mt-1 rounded-lg bg-blue-50 px-2 py-1 text-xs text-blue-700">{String(item.metadata.evidence)}</p>
+                      <p className="mt-1 break-words rounded-lg bg-blue-50 px-2 py-1 text-xs text-blue-700"><BotText text={String(item.metadata.evidence)} /></p>
                     ) : null}
                     <p className="text-xs text-foreground-tertiary">{new Date(item.createdAt || "").toLocaleString()}</p>
                   </div>
