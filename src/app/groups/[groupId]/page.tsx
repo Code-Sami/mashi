@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BotText } from "@/components/bot-text";
 import { GroupHeader } from "@/components/group-header";
+import { LocalDate } from "@/components/local-date";
 import { MarketQuestionWithMentions } from "@/components/market-question-with-mentions";
 import { getGroupPageData } from "@/lib/queries";
 import { getInitials } from "@/lib/utils";
@@ -213,7 +214,7 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
                     {item.type === "market_resolved" && item.metadata?.evidence ? (
                       <p className="mt-1 break-words rounded-lg bg-blue-50 px-2 py-1 text-xs text-blue-700"><BotText text={String(item.metadata.evidence)} /></p>
                     ) : null}
-                    <p className="text-xs text-foreground-tertiary">{new Date(item.createdAt || "").toLocaleString()}</p>
+                    <p className="text-xs text-foreground-tertiary"><LocalDate iso={item.createdAt || ""} /></p>
                   </div>
                 ))}
               </div>

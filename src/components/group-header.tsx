@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useOptimistic, useTransition } from "react";
 import { useState, useCallback } from "react";
+import { DeadlineInput } from "@/components/deadline-input";
+import { LocalDate } from "@/components/local-date";
 import {
   joinGroupAction,
   leaveGroupAction,
@@ -96,15 +98,13 @@ function ModerationLogEntry({ log, members, onDismiss }: {
       </div>
       <p className="mt-1 text-foreground-secondary">{log.reason}</p>
       <p className="mt-1 text-xs text-foreground-tertiary">
-        By {log.userName} · {log.createdAt ? new Date(log.createdAt).toLocaleDateString() : ""}
+        By {log.userName} · {log.createdAt ? <LocalDate iso={log.createdAt} style="date" /> : ""}
       </p>
       {isRejected ? (
         showForm ? (
           <form action={overrideModerationAction} className="mt-3 grid gap-2 border-t border-border-light pt-3">
             <input type="hidden" name="logId" value={log.id} />
-            <input
-              type="datetime-local"
-              name="deadline"
+            <DeadlineInput
               required
               className="rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
             />
@@ -408,7 +408,7 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
                         </div>
                         <div>
                           <Link href={`/users/${req.userId}`} className="text-sm font-medium text-brand-dark hover:underline">{req.name}</Link>
-                          <p className="text-xs text-foreground-tertiary">{req.createdAt ? new Date(req.createdAt).toLocaleDateString() : ""}</p>
+                          <p className="text-xs text-foreground-tertiary">{req.createdAt ? <LocalDate iso={req.createdAt} style="date" /> : ""}</p>
                         </div>
                       </div>
                       <div className="flex gap-1.5">

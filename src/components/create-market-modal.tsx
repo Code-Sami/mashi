@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { CreateMarketForm } from "@/components/create-market-form";
+import { DeadlineInput } from "@/components/deadline-input";
 import { overrideModerationAction } from "@/app/actions";
 
 type MemberOption = {
@@ -106,9 +107,7 @@ export function CreateMarketButton({ groupId, members, moderation }: CreateMarke
                       </p>
                       <form action={overrideModerationAction} className="grid gap-2 md:grid-cols-2">
                         <input type="hidden" name="logId" value={moderation.logId} />
-                        <input
-                          type="datetime-local"
-                          name="deadline"
+                        <DeadlineInput
                           required
                           className="rounded-xl border border-border bg-background-secondary p-2.5 transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 md:col-span-1"
                         />

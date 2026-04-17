@@ -1,6 +1,7 @@
 import { BetForm } from "@/components/bet-form";
 import { BotText } from "@/components/bot-text";
 import { DeleteMarketButton } from "@/components/delete-market-button";
+import { LocalDate } from "@/components/local-date";
 import { ResolveControls } from "@/components/resolve-controls";
 import { MarketQuestionWithMentions } from "@/components/market-question-with-mentions";
 import { PriceHistoryChart } from "@/components/price-history-chart";
@@ -121,7 +122,7 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
           ) : null}
         </p>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-foreground-secondary">
-          <span>Deadline: {new Date(data.market.deadline).toLocaleString()}</span>
+          <span>Deadline: <LocalDate iso={data.market.deadline} /></span>
           <span>${data.market.totalVolume.toFixed(2)} volume</span>
           {data.market.outcome ? (
             <span className="font-semibold">Outcome: <span className={data.market.outcome === "yes" ? "text-yes" : "text-no"}>{data.market.outcome.toUpperCase()}</span></span>
@@ -251,7 +252,7 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
                     {bet.reasoning ? (
                       <p className="mt-1 break-words rounded-lg bg-violet-50 px-2 py-1 text-xs italic text-violet-700">&ldquo;<BotText text={bet.reasoning} />&rdquo;</p>
                     ) : null}
-                    <p className="text-xs text-foreground-tertiary">{new Date(bet.createdAt || "").toLocaleString()}</p>
+                    <p className="text-xs text-foreground-tertiary"><LocalDate iso={bet.createdAt || ""} /></p>
                   </div>
                 );
               })

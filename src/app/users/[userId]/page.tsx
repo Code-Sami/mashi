@@ -1,3 +1,4 @@
+import { LocalDate } from "@/components/local-date";
 import { getPublicUserProfileData } from "@/lib/queries";
 import { getInitials } from "@/lib/utils";
 import Link from "next/link";
@@ -51,7 +52,7 @@ export default async function PublicUserProfilePage({ params }: UserProfilePageP
                 ? data.user.botModel
                   ? `Powered by ${data.user.botModel}`
                   : "AI Bot"
-                : `Joined ${data.user.joinedAt ? new Date(data.user.joinedAt).toLocaleDateString() : "recently"}`}
+                : data.user.joinedAt ? <>Joined <LocalDate iso={data.user.joinedAt} style="date" /></> : "Joined recently"}
             </p>
           </div>
         </div>
@@ -85,7 +86,7 @@ export default async function PublicUserProfilePage({ params }: UserProfilePageP
                 <Link key={group.id} href={`/groups/${group.id}`} className="rounded-xl border border-border p-3 transition hover:border-brand hover:shadow-sm">
                   <p className="font-medium">{group.name}</p>
                   <p className="text-xs text-foreground-tertiary">
-                    {group.role} · joined {group.joinedAt ? new Date(group.joinedAt).toLocaleDateString() : "recently"}
+                    {group.role} · joined {group.joinedAt ? <LocalDate iso={group.joinedAt} style="date" /> : "recently"}
                   </p>
                 </Link>
               ))
@@ -108,7 +109,7 @@ export default async function PublicUserProfilePage({ params }: UserProfilePageP
                   <p className={`text-sm font-semibold ${bet.result === "win" ? "text-increase" : "text-decrease"}`}>
                     {bet.result === "win" ? "WIN" : "LOSS"} · Payout ${bet.payout.toFixed(2)} · P/L {bet.pnl >= 0 ? "+" : ""}${bet.pnl.toFixed(2)}
                   </p>
-                  <p className="text-xs text-foreground-tertiary">{bet.createdAt ? new Date(bet.createdAt).toLocaleString() : ""}</p>
+                  <p className="text-xs text-foreground-tertiary">{bet.createdAt ? <LocalDate iso={bet.createdAt} /> : ""}</p>
                 </Link>
               ))
             )}
@@ -154,7 +155,7 @@ export default async function PublicUserProfilePage({ params }: UserProfilePageP
                       {item.groupName}
                     </Link>
                   )}
-                  <p className="text-xs text-foreground-tertiary">{item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}</p>
+                  <p className="text-xs text-foreground-tertiary">{item.createdAt ? <LocalDate iso={item.createdAt} /> : ""}</p>
                 </div>
               ))
             )}

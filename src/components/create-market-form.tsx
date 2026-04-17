@@ -1,6 +1,7 @@
 "use client";
 
 import { createMarketAction } from "@/app/actions";
+import { DeadlineInput } from "@/components/deadline-input";
 import type { FormEvent } from "react";
 import { useMemo, useRef, useState } from "react";
 
@@ -131,7 +132,7 @@ export function CreateMarketForm({ groupId, members }: CreateMarketFormProps) {
           </div>
         ) : null}
       </div>
-      <input type="datetime-local" name="deadline" required className="rounded-xl border border-border bg-background-secondary p-2.5 transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20" />
+      <DeadlineInput required className="rounded-xl border border-border bg-background-secondary p-2.5 transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20" />
       <select name="umpireId" required defaultValue="" className="rounded-xl border border-border bg-background-secondary p-2.5 transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
         <option value="" disabled>Select Umpire</option>
         {members.map((member) => (

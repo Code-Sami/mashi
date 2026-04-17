@@ -131,8 +131,8 @@ export async function runBotTick(): Promise<TickResult> {
 
   const openMarkets = await MarketModel.find({ groupId, status: "open" }).lean();
 
-  // Phase 1: Try to resolve any markets past deadline + 2hr buffer
-  const resolutionBuffer = 2 * 60 * 60 * 1000;
+  // Phase 1: Try to resolve any markets past deadline + 5min buffer
+  const resolutionBuffer = 5 * 60 * 1000;
   const marketsToResolve = openMarkets.filter(
     (m) => new Date(m.deadline).getTime() + resolutionBuffer < Date.now(),
   );
