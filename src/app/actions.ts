@@ -703,3 +703,56 @@ export async function updateProfileAction(formData: FormData) {
   revalidatePath(`/users/${user._id.toString()}`);
   revalidatePath("/dashboard");
 }
+
+export async function disputeResolutionAction(formData: FormData) {
+  const user = await requireAuthUser();
+  const marketId = formData.get("marketId")?.toString() || "";
+  if (!marketId) throw new Error("Market id is required.");
+
+  await connectToDatabase();
+  const market = await MarketModel.findById(marketId);
+  if (!market) throw new Error("Market not found.");
+  if (market.status !== "resolved") throw new Error("Market is not resolved.");
+
+  const group = await GroupModel.findById(market.groupId).lean();
+  if (!group || group.ownerId.toString() !== user._id.toString()) {
+    throw new Error("Only the group owner can dispute resolutions.");
+  }
+
+  market.status = "open";
+  market.outcome = null;
+  market.resolvedAt = null;
+  await market.save();
+
+  await BetModel.updateMany({ marketId: market._id }, { $unset: { payout: "" } });
+  await ActivityModel.deleteMany({ marketId: market._id, type: "market_resolved" });
+
+  revalidatePath(`/markets/${market._id.toString()}`);
+  revalidatePath(`/groups/${market.groupId.toString()}`);
+  redirect(`/markets/${market._id.toString()}`);
+}
+
+export async function acceptResolutionAction(formData: FormData) {
+  const user = await requireAuthUser();
+  const marketId = formData.get("marketId")?.toString() || "";
+  if (!marketId) throw new Error("Market id is required.");
+
+  const conn = await connectToDatabase();
+  const market = await MarketModel.findById(marketId);
+  if (!market) throw new Error("Market not found.");
+  if (market.status !== "resolved") throw new Error("Market is not resolved.");
+
+  const group = await GroupModel.findById(market.groupId).lean();
+  if (!group || group.ownerId.toString() !== user._id.toString()) {
+    throw new Error("Only the group owner can accept resolutions.");
+  }
+
+  await conn.connection.db!.collection("markets").updateOne(
+    { _id: new Types.ObjectId(marketId) },
+    { $set: { acceptedAt: new Date() } }
+  );
+
+  revalidatePath(`/markets/${market._id.toString()}`);
+  revalidatePath(`/groups/${market.groupId.toString()}`);
+  redirect(`/markets/${market._id.toString()}`);
+}

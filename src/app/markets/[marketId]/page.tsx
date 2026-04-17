@@ -1,6 +1,7 @@
 import { BetForm } from "@/components/bet-form";
 import { BotText } from "@/components/bot-text";
 import { DeleteMarketButton } from "@/components/delete-market-button";
+import { DisputeControls } from "@/components/dispute-controls";
 import { LocalDate } from "@/components/local-date";
 import { ResolveControls } from "@/components/resolve-controls";
 import { MarketQuestionWithMentions } from "@/components/market-question-with-mentions";
@@ -112,7 +113,7 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
               </Link>
             </span>
           ) : null}
-          {data.umpire ? (
+          {data.umpire && !isBotMarket ? (
             <span>
               Umpire:{" "}
               <Link href={`/users/${data.umpire.id}`} className="font-medium text-brand-dark hover:underline">
@@ -198,9 +199,19 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
           </article>
         )}
 
-        {canResolve && data.market.status === "open" ? (
+        {canResolve && data.market.status === "open" && !isBotMarket ? (
           <article className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6 md:col-span-2">
             <ResolveControls marketId={data.market.id} />
+          </article>
+        ) : null}
+
+        {isBotMarket && isGroupOwner && isResolved && !data.acceptedAt ? (
+          <article className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6 md:col-span-2">
+            <DisputeControls
+              marketId={data.market.id}
+              outcome={data.market.outcome as string}
+              evidence={data.resolutionEvidence || ""}
+            />
           </article>
         ) : null}
 

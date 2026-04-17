@@ -55,16 +55,22 @@ Respond with JSON only:
 Only pass if you literally cannot form an opinion on ANY market:
 {"action": "pass", "reasoning": "1 sentence why you're passing"}`;
 
-const RESOLUTION_PROMPT = `A prediction market needs to be resolved. Search the web to determine the factual outcome.
+const RESOLUTION_PROMPT = `A prediction market needs to be resolved. You MUST search the web to find the factual answer.
 
 Question: "{question}"
 Deadline was: {deadline}
 
-Search for the actual real-world result and determine if the answer is YES or NO.
+CRITICAL INSTRUCTIONS:
+1. You MUST perform a web search before answering. Do NOT guess or use training data.
+2. Read the question carefully. If it asks about a value AT A SPECIFIC TIME (e.g. "by 11:00 AM EST"), you must find the value AT THAT EXACT TIME, not the current value.
+3. Find the EXACT data point the question asks about (price, score, temperature, etc.) at the EXACT time or date specified.
+4. State the exact value you found, the time it was recorded, and the source.
+5. Compare it to the threshold in the question to determine YES or NO.
+6. If the specified time hasn't occurred yet, respond with outcome null.
 
 Respond with JSON only:
-{"outcome": "yes" or "no", "evidence": "1-2 sentences citing what you found"}
-or if you genuinely cannot determine the result:
+{"outcome": "yes" or "no", "evidence": "At [specific time from the question], the value was [X] according to [source]. This is [above/below] the threshold of [Y]."}
+or if you genuinely cannot find reliable data:
 {"outcome": null, "evidence": "explanation of why it's unclear"}`;
 
 async function callModel(
@@ -92,6 +98,45 @@ async function callModel(
     return response.text?.trim() || null;
   } catch (e) {
     console.error(`LLM call failed (${provider}/${model}):`, e);
+    return null;
+  }
+}
+
+const EXTRACT_JSON_PROMPT = `Extract the outcome from this prediction market research response.
+Determine if the answer is YES, NO, or unclear (null).
+
+Response to analyze:
+"""
+{text}
+"""
+
+Reply with ONLY this JSON, nothing else:
+{"outcome": "yes" or "no", "evidence": "1-2 sentence summary of the finding"}
+or if unclear:
+{"outcome": null, "evidence": "why it's unclear"}`;
+
+async function parseResolutionResponse(
+  raw: string | null,
+): Promise<{ outcome: string | null; evidence?: string } | null> {
+  if (!raw) return null;
+
+  const direct = extractJson(raw) as { outcome: string | null; evidence?: string } | null;
+  if (direct && (direct.outcome === "yes" || direct.outcome === "no" || direct.outcome === null)) {
+    return direct;
+  }
+
+  // Fallback: web search responses sometimes come back as plain text.
+  // Use a cheap model to extract the structured answer.
+  try {
+    const fallback = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: EXTRACT_JSON_PROMPT.replace("{text}", raw.slice(0, 2000)) }],
+      temperature: 0,
+    });
+    const text = fallback.choices[0]?.message?.content?.trim() || "";
+    return extractJson(text) as { outcome: string | null; evidence?: string } | null;
+  } catch (e) {
+    console.error("Fallback JSON extraction failed:", e);
     return null;
   }
 }
@@ -155,9 +200,8 @@ export async function runLlmTick(
   );
   for (const market of marketsToResolve) {
     const resolver = botUsers[Math.floor(Math.random() * botUsers.length)];
-    const resolverName = resolver.displayName || resolver.name || "Bot";
-    emit(`${resolverName} resolving "${market.question.slice(0, 50)}…"`);
-    const result = await resolveMarket(market, group, resolver);
+    emit(`Resolving "${market.question.slice(0, 50)}…" with dual verification`);
+    const result = await resolveMarket(market, group, resolver, emit);
     if (result) results.push(result);
   }
 
@@ -409,34 +453,65 @@ async function resolveMarket(
   },
   group: { _id: { toString(): string } },
   resolver: BotUser,
+  emit: (msg: string) => void,
 ): Promise<TickResult | null> {
   try {
     const prompt = RESOLUTION_PROMPT
       .replace("{question}", market.question)
       .replace("{deadline}", new Date(market.deadline).toLocaleString());
 
-    const content = await callModel(getBotProvider(resolver), getBotModel(resolver), prompt);
-    if (!content) return null;
+    const shortQ = market.question.length > 50
+      ? market.question.slice(0, 47) + "…"
+      : market.question;
 
-    const parsed = extractJson(content) as { outcome: string | null; evidence?: string } | null;
-    if (!parsed || (parsed.outcome !== "yes" && parsed.outcome !== "no")) return null;
+    // Step 1: GPT-4o resolves with web search
+    emit(`GPT-4o researching "${shortQ}"…`);
+    const gptContent = await callModel("openai", "gpt-4o", prompt);
+    const gptParsed = await parseResolutionResponse(gptContent);
+
+    if (!gptParsed || (gptParsed.outcome !== "yes" && gptParsed.outcome !== "no")) {
+      emit(`GPT-4o could not determine outcome, skipping`);
+      return null;
+    }
+
+    // Step 2: Second GPT-4o call verifies independently
+    emit(`GPT-4o verifying "${shortQ}"…`);
+    const verifierContent = await callModel("openai", "gpt-4o", prompt);
+    const verifierParsed = await parseResolutionResponse(verifierContent);
+
+    if (!verifierParsed || (verifierParsed.outcome !== "yes" && verifierParsed.outcome !== "no")) {
+      emit(`Verifier could not determine outcome, skipping`);
+      return null;
+    }
+
+    // Step 3: Both must agree
+    if (gptParsed.outcome !== verifierParsed.outcome) {
+      emit(`Models disagree on "${shortQ}" (call 1: ${gptParsed.outcome}, call 2: ${verifierParsed.outcome}) — leaving pending`);
+      return {
+        action: "no_action",
+        detail: `Disagreement on "${market.question}": call1=${gptParsed.outcome} (${gptParsed.evidence}), call2=${verifierParsed.outcome} (${verifierParsed.evidence})`,
+      };
+    }
+
+    const outcome = gptParsed.outcome;
+    const evidence = `Call 1: ${gptParsed.evidence || "no detail"} | Call 2: ${verifierParsed.evidence || "no detail"}`;
 
     const liveMarket = await MarketModel.findById(market._id);
     if (!liveMarket || liveMarket.status === "resolved") return null;
 
     liveMarket.status = "resolved";
-    liveMarket.outcome = parsed.outcome;
+    liveMarket.outcome = outcome;
     liveMarket.resolvedAt = new Date();
     await liveMarket.save();
 
     const bets = await BetModel.find({ marketId: liveMarket._id });
-    const winningBets = bets.filter((b) => b.side === parsed.outcome);
+    const winningBets = bets.filter((b) => b.side === outcome);
     const winningPool = winningBets.reduce((s, b) => s + b.amount, 0);
     const totalPool = bets.reduce((s, b) => s + b.amount, 0);
 
     await Promise.all(
       bets.map((bet) => {
-        if (bet.side !== parsed.outcome || winningPool <= 0 || totalPool <= 0) {
+        if (bet.side !== outcome || winningPool <= 0 || totalPool <= 0) {
           return BetModel.updateOne({ _id: bet._id }, { payout: 0 });
         }
         const payout = (bet.amount / winningPool) * totalPool;
@@ -450,8 +525,8 @@ async function resolveMarket(
       type: "market_resolved",
       marketId: liveMarket._id,
       metadata: {
-        outcome: parsed.outcome,
-        evidence: parsed.evidence || "",
+        outcome,
+        evidence,
         isBot: true,
         autoResolved: true,
       },
@@ -459,7 +534,7 @@ async function resolveMarket(
 
     return {
       action: "resolved_market",
-      detail: `Resolved "${market.question}" → ${parsed.outcome.toUpperCase()}: ${parsed.evidence}`,
+      detail: `Resolved "${market.question}" → ${outcome.toUpperCase()} (both models agree): ${evidence}`,
     };
   } catch (e) {
     console.error("LLM resolution failed:", e);

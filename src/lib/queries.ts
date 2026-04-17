@@ -260,6 +260,7 @@ export async function getMarketDetailData(marketId: string) {
     market: serializeMarket(market),
     groupOwnerId: group?.ownerId?.toString() || null,
     groupName: group?.name || null,
+    acceptedAt: (market as Record<string, unknown>).acceptedAt ? true : false,
     resolutionEvidence: resolveActivity?.metadata?.evidence
       ? String(resolveActivity.metadata.evidence)
       : null,
