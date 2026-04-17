@@ -60,11 +60,12 @@ IMPORTANT: Search the web FIRST to find current news, prices, weather forecasts,
 
 Rules:
 - Search the web for CURRENT data before creating the question
-- The question MUST be objectively verifiable within 24-48 hours
+- The question MUST be objectively verifiable within 12-48 hours
 - Set thresholds near current values so the outcome is genuinely uncertain (close to 50/50)
 - Include specific numbers, locations, dates, and times
 - Use "tomorrow" relative to today's date: {today}
 - Vary topics: sports, weather, finance, crypto, politics, pop culture, tech
+- CRITICAL: The deadline (deadlineHours) MUST be set BEFORE the event's observable time. For example, if the question asks about a value "at 11:00 AM", the deadline must expire before 11:00 AM so betting closes while the outcome is still uncertain. Choose deadlineHours accordingly (can be anywhere from 12 to 48).
 
 Here are recent markets (open AND resolved) — do NOT create anything similar:
 {existingMarkets}
@@ -72,7 +73,7 @@ Here are recent markets (open AND resolved) — do NOT create anything similar:
 You MUST create a COMPLETELY DIFFERENT topic from all of the above. If you can't think of something new, respond with {"skip": true}.
 
 Respond with JSON only:
-{"question": "...", "deadlineHours": 24}
+{"question": "...", "deadlineHours": <number between 12 and 48>}
 or if you can't think of a good non-duplicate question:
 {"skip": true}`;
 
