@@ -417,7 +417,10 @@ export async function resolveMarketAction(formData: FormData) {
   await connectToDatabase();
   const market = await MarketModel.findById(marketId);
   if (!market) throw new Error("Market not found.");
-  if (market.umpireId.toString() !== user._id.toString()) throw new Error("Only umpire can resolve.");
+  const group = await GroupModel.findById(market.groupId).lean();
+  const isUmpire = market.umpireId.toString() === user._id.toString();
+  const isGroupOwner = group && group.ownerId.toString() === user._id.toString();
+  if (!isUmpire && !isGroupOwner) throw new Error("Only umpire or group owner can resolve.");
   if (market.status === "resolved") return;
 
   market.status = "resolved";

@@ -3,6 +3,7 @@ import { BotText } from "@/components/bot-text";
 import { DeleteMarketButton } from "@/components/delete-market-button";
 import { DisputeControls } from "@/components/dispute-controls";
 import { LocalDate } from "@/components/local-date";
+import { MarketGearMenu } from "@/components/market-gear-menu";
 import { ResolveControls } from "@/components/resolve-controls";
 import { MarketQuestionWithMentions } from "@/components/market-question-with-mentions";
 import { PriceHistoryChart } from "@/components/price-history-chart";
@@ -102,6 +103,14 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
             }`}>
               {data.market.status !== "open" ? "Resolved" : isPastDeadline ? "Pending" : "Open"}
             </span>
+            {isGroupOwner ? (
+              <MarketGearMenu
+                marketId={data.market.id}
+                question={data.market.question}
+                status={data.market.status as "open" | "resolved"}
+                hasBets={hasBets}
+              />
+            ) : null}
           </div>
         </div>
         <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-foreground-secondary">

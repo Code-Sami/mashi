@@ -2,9 +2,10 @@ import Link from "next/link";
 import { BotText } from "@/components/bot-text";
 import { GroupHeader } from "@/components/group-header";
 import { LocalDate } from "@/components/local-date";
+import { MarketGearMenu } from "@/components/market-gear-menu";
 import { MarketQuestionWithMentions } from "@/components/market-question-with-mentions";
 import { getGroupPageData } from "@/lib/queries";
-import { getInitials } from "@/lib/utils";
+import { getInitials, relativeTime } from "@/lib/utils";
 import { notFound } from "next/navigation";
 import { requireAuthUser } from "@/lib/session";
 
@@ -111,23 +112,38 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
                   <p className="text-sm text-foreground-tertiary">No active markets yet.</p>
                 ) : null}
                 {data.activeMarkets.map((market) => (
-                  <Link key={market.id} href={`/markets/${market.id}`} className="rounded-xl border border-border p-3 transition hover:border-brand hover:shadow-sm">
-                    <p className="font-medium">
-                      <MarketQuestionWithMentions
-                        question={market.question}
-                        taggedUsers={(market.taggedUserIds || []).map((id) => ({
-                          id,
-                          name: memberNameById.get(id) || "Unknown user",
-                        }))}
-                        linkify={false}
-                      />
-                    </p>
-                    <div className="mt-1.5 flex gap-3 text-sm">
-                      <span className="font-medium text-yes">{Math.round(market.yesPrice * 100)}% Yes</span>
-                      <span className="font-medium text-no">{Math.round(market.noPrice * 100)}% No</span>
-                      <span className="text-foreground-tertiary">${market.totalVolume.toFixed(2)} vol</span>
-                    </div>
-                  </Link>
+                  <div key={market.id} className="relative rounded-xl border border-border p-3 transition hover:border-brand hover:shadow-sm">
+                    <Link href={`/markets/${market.id}`} className="block">
+                      <p className="font-medium pr-8">
+                        <MarketQuestionWithMentions
+                          question={market.question}
+                          taggedUsers={(market.taggedUserIds || []).map((id) => ({
+                            id,
+                            name: memberNameById.get(id) || "Unknown user",
+                          }))}
+                          linkify={false}
+                        />
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
+                        <span className="font-medium text-yes">{Math.round(market.yesPrice * 100)}% Yes</span>
+                        <span className="font-medium text-no">{Math.round(market.noPrice * 100)}% No</span>
+                        <span className="text-foreground-tertiary">${market.totalVolume.toFixed(2)} vol</span>
+                        <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
+                          {relativeTime(market.deadline)}
+                        </span>
+                      </div>
+                    </Link>
+                    {isOwner ? (
+                      <div className="absolute right-2 top-2">
+                        <MarketGearMenu
+                          marketId={market.id}
+                          question={market.question}
+                          status="open"
+                          hasBets={market.betCount > 0}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
                 ))}
               </div>
             </article>
@@ -142,19 +158,35 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
                   <p className="text-sm text-foreground-tertiary">No resolved markets yet.</p>
                 ) : null}
                 {data.resolvedMarkets.map((market) => (
-                  <Link key={market.id} href={`/markets/${market.id}`} className="rounded-xl border border-border p-3 transition hover:border-brand hover:shadow-sm">
-                    <p className="font-medium">
-                      <MarketQuestionWithMentions
-                        question={market.question}
-                        taggedUsers={(market.taggedUserIds || []).map((id) => ({
-                          id,
-                          name: memberNameById.get(id) || "Unknown user",
-                        }))}
-                        linkify={false}
-                      />
-                    </p>
-                    <p className="mt-1 text-sm text-foreground-secondary">Outcome: <span className={`font-semibold ${market.outcome === "yes" ? "text-yes" : market.outcome === "no" ? "text-no" : ""}`}>{market.outcome?.toUpperCase() || "N/A"}</span></p>
-                  </Link>
+                  <div key={market.id} className="relative rounded-xl border border-border p-3 transition hover:border-brand hover:shadow-sm">
+                    <Link href={`/markets/${market.id}`} className="block">
+                      <p className="font-medium pr-8">
+                        <MarketQuestionWithMentions
+                          question={market.question}
+                          taggedUsers={(market.taggedUserIds || []).map((id) => ({
+                            id,
+                            name: memberNameById.get(id) || "Unknown user",
+                          }))}
+                          linkify={false}
+                        />
+                      </p>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-sm text-foreground-secondary">
+                        <span>Outcome: <span className={`font-semibold ${market.outcome === "yes" ? "text-yes" : market.outcome === "no" ? "text-no" : ""}`}>{market.outcome?.toUpperCase() || "N/A"}</span></span>
+                        <span>${market.totalVolume.toFixed(2)} vol</span>
+                        <span><LocalDate iso={market.deadline} /></span>
+                      </div>
+                    </Link>
+                    {isOwner ? (
+                      <div className="absolute right-2 top-2">
+                        <MarketGearMenu
+                          marketId={market.id}
+                          question={market.question}
+                          status="resolved"
+                          hasBets={market.betCount > 0}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
                 ))}
               </div>
             </article>

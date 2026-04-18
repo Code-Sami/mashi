@@ -63,9 +63,13 @@ Rules:
 - The question MUST be objectively verifiable within 12-48 hours
 - Set thresholds near current values so the outcome is genuinely uncertain (close to 50/50)
 - Include specific numbers, locations, dates, and times
-- Use "tomorrow" relative to today's date: {today}
+- Use "tomorrow" relative to today's date and time: {today}
 - Vary topics: sports, weather, finance, crypto, politics, pop culture, tech
-- CRITICAL: The deadline (deadlineHours) MUST be set BEFORE the event's observable time. For example, if the question asks about a value "at 11:00 AM", the deadline must expire before 11:00 AM so betting closes while the outcome is still uncertain. Choose deadlineHours accordingly (can be anywhere from 12 to 48).
+- CRITICAL DEADLINE RULE: The deadline is when betting CLOSES. It MUST be set BEFORE the event starts so that the outcome is still unknown when betting closes. Think step by step:
+  1. Identify the exact start time of the event in your question (e.g. game tip-off, market open, race start)
+  2. Convert that time to UTC
+  3. Set deadlineUtc to 30-60 minutes BEFORE the event start time in UTC
+  Example: If a game starts at 1:00 PM EDT (= 5:00 PM UTC), set deadlineUtc to "2026-04-19T16:30:00Z" (30 min before)
 
 Here are recent markets (open AND resolved) — do NOT create anything similar:
 {existingMarkets}
@@ -73,7 +77,7 @@ Here are recent markets (open AND resolved) — do NOT create anything similar:
 You MUST create a COMPLETELY DIFFERENT topic from all of the above. If you can't think of something new, respond with {"skip": true}.
 
 Respond with JSON only:
-{"question": "...", "deadlineHours": <number between 12 and 48>}
+{"question": "...", "deadlineUtc": "<ISO 8601 UTC timestamp, e.g. 2026-04-19T16:30:00Z>"}
 or if you can't think of a good non-duplicate question:
 {"skip": true}`;
 
@@ -340,12 +344,13 @@ async function createMarket(
   existingMarkets: Array<{ question: string }>,
 ): Promise<TickResult | null> {
   try {
-    const today = new Date().toLocaleDateString("en-US", {
+    const now = new Date();
+    const today = now.toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
       month: "long",
       day: "numeric",
-    });
+    }) + ` (current UTC time: ${now.toISOString()})`;
     const botName = creator.displayName || creator.name || "Bot";
     const prompt = MARKET_CREATION_PROMPT
       .replace("{botName}", botName)
@@ -356,7 +361,7 @@ async function createMarket(
     const content = await callModel(getBotProvider(creator), getBotModel(creator), prompt);
     if (!content) return null;
 
-    const parsed = extractJson(content) as { skip?: boolean; question?: string; deadlineHours?: number } | null;
+    const parsed = extractJson(content) as { skip?: boolean; question?: string; deadlineUtc?: string; deadlineHours?: number } | null;
     if (!parsed || parsed.skip || !parsed.question) return null;
 
     if (await isDuplicateQuestion(parsed.question, existingMarkets.map((m) => m.question))) {
@@ -364,8 +369,18 @@ async function createMarket(
       return null;
     }
 
-    const deadlineHours = Math.min(Math.max(parsed.deadlineHours || 24, 12), 48);
-    const deadline = new Date(Date.now() + deadlineHours * 60 * 60 * 1000);
+    let deadline: Date;
+    if (parsed.deadlineUtc) {
+      deadline = new Date(parsed.deadlineUtc);
+      if (isNaN(deadline.getTime()) || deadline.getTime() <= Date.now()) {
+        deadline = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      }
+      const maxDeadline = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      if (deadline > maxDeadline) deadline = maxDeadline;
+    } else {
+      const deadlineHours = Math.min(Math.max(parsed.deadlineHours || 24, 12), 48);
+      deadline = new Date(Date.now() + deadlineHours * 60 * 60 * 1000);
+    }
 
     const market = await MarketModel.create({
       question: parsed.question,
@@ -400,7 +415,7 @@ async function createMarket(
 
     return {
       action: "created_market",
-      detail: `${botName} created: "${parsed.question}" (deadline: ${deadlineHours}h)`,
+      detail: `${botName} created: "${parsed.question}" (deadline: ${deadline.toISOString()})`,
     };
   } catch (e) {
     console.error("LLM market creation failed:", e);

@@ -485,13 +485,23 @@ export async function getGroupPageData(groupId: string, userId: string) {
     }).filter((member) => member.name !== "Unknown"),
     activeMarkets: markets
       .filter((market) => market.status === "open")
+      .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
       .map((market) => ({
         ...serializeMarket(market),
+        betCount: bets.filter((b) => b.marketId.toString() === market._id.toString()).length,
         priceHistory: priceHistoryByMarketId.get(market._id.toString()) || [],
       })),
     resolvedMarkets: markets
       .filter((market) => market.status === "resolved")
-      .map((market) => serializeMarket(market)),
+      .sort((a, b) => {
+        const aTime = a.resolvedAt ? new Date(a.resolvedAt).getTime() : 0;
+        const bTime = b.resolvedAt ? new Date(b.resolvedAt).getTime() : 0;
+        return bTime - aTime;
+      })
+      .map((market) => ({
+        ...serializeMarket(market),
+        betCount: bets.filter((b) => b.marketId.toString() === market._id.toString()).length,
+      })),
     moderationLogs,
     activity: activities.map((item) => {
       const actor = activityActorMap.get(item.actorUserId.toString());
