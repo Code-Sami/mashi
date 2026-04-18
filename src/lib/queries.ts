@@ -370,7 +370,7 @@ export async function getGroupPageData(groupId: string, userId: string) {
   }).lean();
   const resolvedMarkets = markets.filter((market) => market.status === "resolved" && market.outcome);
   const resolvedMarketMap = new Map(
-    resolvedMarkets.map((market) => [market._id.toString(), market.outcome as "yes" | "no"])
+    resolvedMarkets.map((market) => [market._id.toString(), market.outcome as "yes" | "no"]),
   );
 
   const poolByMarket = new Map<string, { totalPool: number; winningPool: number }>();
