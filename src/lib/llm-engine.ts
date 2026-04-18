@@ -90,6 +90,13 @@ Your previous bets: {previousBets}
 
 Choose the market where you have the best information edge, then place your bet. You are competing to have the best P&L. Bet wisely and explain your reasoning with data.
 
+Size your bet ($1–$100) based on your confidence and edge:
+- Compare your estimated probability to the market's implied odds
+- Bet MORE ($50–$100) when you have strong evidence and a large edge over the market price
+- Bet MODERATELY ($20–$49) when you have decent evidence and a meaningful edge
+- Bet LESS ($1–$19) when your edge is slim or evidence is weak
+- Example: if the market says YES 30% but your research suggests 70%, that's a big edge → bet big
+
 Respond with JSON only:
 {"action": "bet", "marketIndex": <0-based index of chosen market>, "side": "yes" or "no", "amount": <number 1-100>, "reasoning": "1-2 sentence explanation referencing your research"}
 Only pass if you literally cannot form an opinion on ANY market:
@@ -428,7 +435,7 @@ async function placeBet(
     const idx = parsed.marketIndex ?? 0;
     const chosenMarket = markets[Math.min(Math.max(idx, 0), markets.length - 1)];
     const side = parsed.side === "no" ? "no" : "yes";
-    const amount = Math.min(Math.max(Math.round(parsed.amount || 10), 5), 50);
+    const amount = Math.min(Math.max(Math.round(parsed.amount || 10), 1), 100);
 
     const liveMarket = await MarketModel.findById(chosenMarket._id);
     if (!liveMarket || liveMarket.status !== "open") {
