@@ -39,7 +39,8 @@ function aggregateEntries(entries: SettlementEntry[]) {
 function SettlementBody({ entries }: { entries: SettlementEntry[] }) {
   const aggregated = aggregateEntries(entries);
   const winners = aggregated.filter((e) => e.pnl > 0).sort((a, b) => b.pnl - a.pnl);
-  const losers = aggregated.filter((e) => e.pnl <= 0).sort((a, b) => a.pnl - b.pnl);
+  const breakEven = aggregated.filter((e) => e.pnl === 0);
+  const losers = aggregated.filter((e) => e.pnl < 0).sort((a, b) => a.pnl - b.pnl);
 
   return (
     <>
@@ -67,8 +68,31 @@ function SettlementBody({ entries }: { entries: SettlementEntry[] }) {
         </div>
       ) : null}
 
-      {losers.length > 0 ? (
+      {breakEven.length > 0 ? (
         <div className={winners.length > 0 ? "mt-4" : ""}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-foreground-secondary">Break even</p>
+          <div className="mt-2 grid gap-1.5">
+            {breakEven.map((entry) => (
+              <div key={`${entry.userId}-${entry.side}`} className="flex items-center justify-between rounded-xl bg-foreground-tertiary/5 px-3 py-2.5">
+                <div className="min-w-0">
+                  <Link href={`/users/${entry.userId}`} className="text-sm font-semibold text-brand-dark hover:underline">
+                    {entry.name}
+                  </Link>
+                  <p className="text-xs text-foreground-tertiary">
+                    Bet ${entry.amount.toFixed(2)} {entry.side.toUpperCase()}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-foreground-secondary">$0.00</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {losers.length > 0 ? (
+        <div className={winners.length > 0 || breakEven.length > 0 ? "mt-4" : ""}>
           <p className="text-xs font-semibold uppercase tracking-wide text-decrease">Losers</p>
           <div className="mt-2 grid gap-1.5">
             {losers.map((entry) => (
@@ -82,7 +106,7 @@ function SettlementBody({ entries }: { entries: SettlementEntry[] }) {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-bold text-decrease">-${entry.amount.toFixed(2)}</p>
+                  <p className="text-sm font-bold text-decrease">${entry.pnl.toFixed(2)}</p>
                 </div>
               </div>
             ))}
