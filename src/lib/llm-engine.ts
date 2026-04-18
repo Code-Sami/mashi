@@ -106,19 +106,20 @@ const RESOLUTION_PROMPT = `A prediction market needs to be resolved. You MUST se
 
 Question: "{question}"
 Deadline was: {deadline}
+Current time (UTC): {now}
 
 CRITICAL INSTRUCTIONS:
 1. You MUST perform a web search before answering. Do NOT guess or use training data.
-2. Read the question carefully. If it asks about a value AT A SPECIFIC TIME (e.g. "by 11:00 AM EST"), you must find the value AT THAT EXACT TIME, not the current value.
-3. Find the EXACT data point the question asks about (price, score, temperature, etc.) at the EXACT time or date specified.
-4. State the exact value you found, the time it was recorded, and the source.
-5. Compare it to the threshold in the question to determine YES or NO.
-6. If the specified time hasn't occurred yet, respond with outcome null.
+2. Read the question carefully. Identify the EXACT time window or event the question asks about.
+3. Compare the event time to the CURRENT date/time above. If the event has NOT YET OCCURRED, you MUST return outcome null. Do NOT resolve based on forecasts, predictions, or projected values — only resolve based on ACTUAL OBSERVED data after the event has happened.
+4. Find the EXACT data point the question asks about (price, score, temperature, etc.) at the EXACT time or date specified.
+5. State the exact value you found, the time it was recorded, and the source.
+6. Compare it to the threshold in the question to determine YES or NO.
 
 Respond with JSON only:
 {"outcome": "yes" or "no", "evidence": "At [specific time from the question], the value was [X] according to [source]. This is [above/below] the threshold of [Y]."}
-or if you genuinely cannot find reliable data:
-{"outcome": null, "evidence": "explanation of why it's unclear"}`;
+or if the event hasn't happened yet OR you cannot find reliable data:
+{"outcome": null, "evidence": "explanation — e.g. the event time is [X] which has not yet passed"}`;
 
 async function callModel(
   provider: LlmProvider,
@@ -150,7 +151,7 @@ async function callModel(
 }
 
 const EXTRACT_JSON_PROMPT = `Extract the outcome from this prediction market research response.
-Determine if the answer is YES, NO, or unclear (null).
+Determine if the answer is YES, NO, or unclear/not yet happened (null).
 
 Response to analyze:
 """
@@ -159,8 +160,38 @@ Response to analyze:
 
 Reply with ONLY this JSON, nothing else:
 {"outcome": "yes" or "no", "evidence": "1-2 sentence summary of the finding"}
-or if unclear:
-{"outcome": null, "evidence": "why it's unclear"}`;
+or if the event hasn't happened yet, data is based on forecasts, or it's otherwise unclear:
+{"outcome": null, "evidence": "why it can't be resolved yet"}`;
+
+async function summarizeEvidence(
+  question: string,
+  outcome: string,
+  evidence1: string,
+  evidence2: string,
+): Promise<string> {
+  const fallback = `Resolved ${outcome.toUpperCase()}. ${evidence1 || evidence2 || "No details available."}`;
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0,
+      messages: [{
+        role: "user",
+        content: `Two independent AI judges researched this prediction market question and both agreed on the outcome. Write a brief, user-friendly summary (2-3 sentences) of what they found. Merge their findings into one cohesive explanation. Include specific data points and mention sources when available. Do NOT mention "Call 1", "Call 2", "judges", or "verification" — just present the facts.
+
+Question: "${question}"
+Outcome: ${outcome.toUpperCase()}
+
+Judge 1 found: ${evidence1 || "no detail"}
+Judge 2 found: ${evidence2 || "no detail"}
+
+Write ONLY the summary, no JSON or formatting.`,
+      }],
+    });
+    return response.choices[0]?.message?.content?.trim() || fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 async function parseResolutionResponse(
   raw: string | null,
@@ -505,7 +536,8 @@ async function resolveMarket(
   try {
     const prompt = RESOLUTION_PROMPT
       .replace("{question}", market.question)
-      .replace("{deadline}", new Date(market.deadline).toLocaleString());
+      .replace("{deadline}", new Date(market.deadline).toLocaleString())
+      .replace("{now}", new Date().toISOString());
 
     const shortQ = market.question.length > 50
       ? market.question.slice(0, 47) + "…"
@@ -541,7 +573,12 @@ async function resolveMarket(
     }
 
     const outcome = gptParsed.outcome;
-    const evidence = `Call 1: ${gptParsed.evidence || "no detail"} | Call 2: ${verifierParsed.evidence || "no detail"}`;
+    const evidence = await summarizeEvidence(
+      market.question,
+      outcome,
+      gptParsed.evidence || "",
+      verifierParsed.evidence || "",
+    );
 
     const liveMarket = await MarketModel.findById(market._id);
     if (!liveMarket || liveMarket.status === "resolved") return null;

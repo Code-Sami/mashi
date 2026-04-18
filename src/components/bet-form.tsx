@@ -62,7 +62,7 @@ export function BetForm({
   isPastDeadline,
 }: BetFormProps) {
   const [step, setStep] = useState<"input" | "confirm">("input");
-  const [side, setSide] = useState<"yes" | "no">("yes");
+  const [side, setSide] = useState<"yes" | "no" | null>(null);
   const [amount, setAmount] = useState("");
   const [preview, setPreview] = useState<BetPreview | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -70,6 +70,7 @@ export function BetForm({
 
   function handlePlaceBet(e: React.FormEvent) {
     e.preventDefault();
+    if (!side) return;
     const numAmount = Number(amount);
     if (!numAmount || numAmount <= 0 || numAmount > 100) return;
     setPreview(getBetPreview(numAmount, side, yesShares, noShares));
@@ -77,12 +78,17 @@ export function BetForm({
   }
 
   function handleConfirm() {
-    startTransition(() => {
+    if (!side) return;
+    startTransition(async () => {
       const formData = new FormData();
       formData.set("marketId", marketId);
       formData.set("side", side);
       formData.set("amount", amount);
-      placeBetAction(formData);
+      await placeBetAction(formData);
+      setStep("input");
+      setPreview(null);
+      setAmount("");
+      setSide(null);
     });
   }
 
@@ -91,7 +97,7 @@ export function BetForm({
     setPreview(null);
   }
 
-  const sideLabel = side.toUpperCase();
+  const sideLabel = side?.toUpperCase() ?? "";
 
   return (
     <>
@@ -117,7 +123,7 @@ export function BetForm({
       {step === "input" ? (
         <form ref={formRef} onSubmit={handlePlaceBet} className="mt-3 grid gap-2">
           <div className="grid grid-cols-2 gap-2">
-            <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 p-3 text-sm font-semibold transition ${side === "yes" ? "border-yes bg-yes-bg text-yes shadow-sm" : "border-yes/30 bg-yes-bg text-yes"}`}>
+            <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 p-3 text-sm font-semibold transition ${side === "yes" ? "border-yes bg-yes-bg text-yes shadow-sm" : "border-yes/30 bg-yes-bg/50 text-yes/60"}`}>
               <input
                 type="radio"
                 name="side"
@@ -129,7 +135,7 @@ export function BetForm({
               />
               Yes
             </label>
-            <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 p-3 text-sm font-semibold transition ${side === "no" ? "border-no bg-no-bg text-no shadow-sm" : "border-no/30 bg-no-bg text-no"}`}>
+            <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 p-3 text-sm font-semibold transition ${side === "no" ? "border-no bg-no-bg text-no shadow-sm" : "border-no/30 bg-no-bg/50 text-no/60"}`}>
               <input
                 type="radio"
                 name="side"
@@ -156,7 +162,7 @@ export function BetForm({
             disabled={!canBet}
           />
           <button
-            disabled={!canBet}
+            disabled={!canBet || !side}
             className="rounded-xl bg-brand px-4 py-2.5 font-semibold text-brand-dark transition hover:bg-brand-hover disabled:bg-border disabled:text-foreground-tertiary"
           >
             Place bet
