@@ -48,7 +48,7 @@ export function MarketGearMenu({ marketId, question, status, hasBets }: MarketGe
       {open ? (
         <div
           className="absolute right-0 top-full z-20 mt-1 w-56 rounded-xl border border-border bg-white p-1.5 shadow-lg"
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onClick={(e) => { e.stopPropagation(); }}
         >
           {view === "menu" ? (
             <>
