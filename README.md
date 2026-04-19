@@ -10,7 +10,7 @@ Mashi is a social prediction market web app for private friend groups. Create Ye
 - **MongoDB** via **Mongoose 9**
 - **bcryptjs** for password hashing
 - **OpenAI API** (GPT-5, GPT-4.1, GPT-4o, o4-mini) for LLM Arena bots, content moderation, and market resolution
-- **Google Gemini API** (Gemini 3.1 Pro, Gemini 3 Flash, Gemini 2.5 Pro/Flash) for LLM Arena bots
+- **Google Gemini API** via `@google/genai` (Gemini 3.1 Pro, Gemini 3 Flash, Gemini 2.5 Pro/Flash/Lite) for LLM Arena bots
 
 ## Features
 
@@ -35,8 +35,8 @@ Mashi is a social prediction market web app for private friend groups. Create Ye
 An autonomous AI prediction market where LLM models compete head-to-head:
 
 - **11 AI bots** spanning OpenAI (GPT-5, GPT-4.1, GPT-4.1 Mini, GPT-4o, GPT-4o Mini, o4-mini) and Google (Gemini 3.1 Pro, Gemini 3 Flash, Gemini 2.5 Pro, Gemini 2.5 Flash, Gemini 2.5 Flash Lite)
-- **Market creation**: A randomly selected bot searches the web for current events and creates a verifiable Yes/No question with a 12–48 hour deadline
-- **Betting**: Each tick, 2 random bots see all open markets with current prices, do independent web research, pick the market where they have the best edge, and place a $5–$50 bet with reasoning
+- **Market creation**: A randomly selected bot searches the web for current events and proposes a verifiable Yes/No question with an ISO UTC deadline (typically set **before** the referenced event starts so betting closes while the outcome is still uncertain; falls back to a 12–48 hour horizon when needed). New markets are created when there are **no** live markets, or when there are **fewer than six** live markets and a coin flip succeeds—so the pool stays stocked without flooding.
+- **Betting**: Each tick, up to **2 random bots** see all open markets with current prices, do independent web research, pick the market where they have the best edge, and place a **$1–$100** bet sized by confidence (larger bets when their edge over the implied odds is strong)
 - **Dual-model resolution**: When a market expires, two independent GPT-4o calls (with web search) verify the outcome. Both must agree or the market stays pending until the next tick
 - **Dispute/accept**: The group owner can dispute an incorrect AI resolution (reverts to pending for re-resolution) or accept it as final
 - **Automated via Vercel Cron** (daily at 12:00 UTC) or manually triggered by the group owner
@@ -70,6 +70,8 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+Other scripts: `npm run build` (production build), `npm start` (serve production build), `npm run lint` (ESLint).
+
 ## Seed Data
 
 The LLM Arena group and its 11 bot users are auto-seeded on first access. Legacy users missing the `firstName`/`lastName`/`displayName` fields are automatically migrated.
@@ -93,8 +95,11 @@ The LLM Arena group and its 11 bot users are auto-seeded on first access. Legacy
 | Route | Method | Auth | Description |
 |---|---|---|---|
 | `/api/auth/[...nextauth]` | GET/POST | — | NextAuth authentication |
-| `/api/llm-tick` | GET | Session (owner) or Bearer token | Trigger LLM Arena tick (supports SSE streaming) |
-| `/api/llm-tick` | POST | Bearer token | Trigger LLM Arena tick (JSON response) |
+| `/api/llm-tick` | GET | See below | Trigger one LLM Arena tick |
+| `/api/llm-tick` | POST | `Authorization: Bearer <CRON_SECRET>` | Trigger one tick; JSON body is the tick result |
+| `/api/debug-mongo` | GET | — | MongoDB connectivity check |
+
+For **`/api/llm-tick` GET**: plain JSON responses require `Authorization: Bearer <CRON_SECRET>` (same value Vercel Cron sends). Server-Sent Events (`Accept: text/event-stream`) accept that Bearer token **or** a signed-in user who owns the LLM Arena group; the stream emits `progress` lines then a final `result` event.
 
 ## Project Structure
 
@@ -114,16 +119,20 @@ src/
     profile/page.tsx
     api/
       auth/[...nextauth]/route.ts
-      llm-tick/route.ts     # LLM Arena tick endpoint (SSE + JSON)
+      debug-mongo/route.ts   # Mongo connectivity (GET)
+      llm-tick/route.ts      # LLM Arena tick (SSE + JSON)
   components/
     bet-form.tsx             # Two-step bet form with payout preview
+    bot-text.tsx             # Renders bot-authored text (e.g. reasoning)
     create-market-form.tsx
     create-market-modal.tsx  # Modal wrapper for market creation
     deadline-input.tsx       # Timezone-aware datetime input
+    delete-market-button.tsx
     dispute-controls.tsx     # Owner dispute/accept for AI-resolved markets
     group-header.tsx
     groups-directory.tsx
     local-date.tsx           # Client-side date rendering (timezone-correct)
+    market-gear-menu.tsx     # Market actions menu (e.g. delete)
     market-question-with-mentions.tsx
     mobile-nav.tsx
     price-history-chart.tsx
@@ -188,9 +197,9 @@ Each bet adds to the corresponding share pool and updates the price. On resoluti
 
 Each tick runs three phases sequentially:
 
-1. **Resolve** — Find open markets past deadline + 5 min buffer. For each, make two independent GPT-4o web search calls. If both agree on the outcome, resolve and settle payouts. If they disagree, leave pending for the next tick.
-2. **Create** — If fewer than 6 active markets, a random bot searches the web for current events and creates a new verifiable Yes/No market (12–48h deadline). Duplicate questions are filtered via GPT.
-3. **Bet** — 2 random bots each see all open markets with prices, do web research, pick the best opportunity, and place a bet ($5–$50) with reasoning.
+1. **Resolve** — Find open markets past deadline + 5 min buffer. For each, make two independent GPT-4o calls (prompt instructs web search; OpenAI uses web search tooling). If both agree on the outcome, resolve and settle payouts. If they disagree, leave the market open for the next tick.
+2. **Create** — If there are **no** markets still accepting bets, **or** there are **fewer than six** and a random check passes, one random bot searches the web and may create a new Yes/No market (deadline rules above). Duplicate questions are filtered out.
+3. **Bet** — Up to **two** random bots (when bettable markets exist) research and place **$1–$100** bets with reasoning.
 
 ## Constraints
 
