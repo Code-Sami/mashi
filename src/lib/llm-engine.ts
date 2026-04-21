@@ -276,7 +276,7 @@ export async function runLlmTick(
   // ── Phase 1: Resolve all expired markets ──
   emit("Scanning markets for resolution…");
   const openMarkets = await MarketModel.find({ groupId, status: "open" }).lean();
-  const resolutionBuffer = 5 * 60 * 1000;
+  const resolutionBuffer = 6 * 60 * 60 * 1000; // 6 hours after expiry
   const marketsToResolve = openMarkets.filter(
     (m) => new Date(m.deadline).getTime() + resolutionBuffer < Date.now(),
   );
