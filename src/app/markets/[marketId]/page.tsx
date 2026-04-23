@@ -9,6 +9,7 @@ import { MarketQuestionWithMentions } from "@/components/market-question-with-me
 import { PriceHistoryChart } from "@/components/price-history-chart";
 import { SettlementCard, SettlementPopup } from "@/components/settlement-popup";
 import { connectToDatabase } from "@/lib/mongodb";
+import { getPrices } from "@/lib/market";
 import { getMarketDetailData } from "@/lib/queries";
 import { GroupMemberModel } from "@/models/GroupMember";
 import Link from "next/link";
@@ -27,9 +28,38 @@ type MarketPageProps = {
 export async function generateMetadata({ params }: MarketPageProps): Promise<Metadata> {
   const { marketId } = await params;
   await connectToDatabase();
-  const market = await MarketModel.findById(marketId, { question: 1 }).lean();
+  const market = await MarketModel.findById(
+    marketId,
+    { question: 1, yesShares: 1, noShares: 1, totalVolume: 1, status: 1, outcome: 1, groupId: 1 }
+  ).lean();
+  const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mashimarkets.com";
+  const marketUrl = `${siteUrl}/markets/${marketId}`;
+  if (!market) {
+    return {
+      title: "Market",
+      openGraph: {
+        title: "Market",
+        url: marketUrl,
+      },
+    };
+  }
+  const prices = getPrices(market.yesShares || 0, market.noShares || 0);
+  const yesPct = Math.round(prices.yesPrice * 100);
+  const noPct = Math.round(prices.noPrice * 100);
+  const outcomeText = market.status === "resolved" && market.outcome
+    ? `Outcome: ${String(market.outcome).toUpperCase()}`
+    : "Open for betting";
+  const description = `${outcomeText} · Yes ${yesPct}% · No ${noPct}% · $${Number(market.totalVolume || 0).toFixed(2)} volume`;
+
   return {
-    title: market?.question || "Market",
+    title: market.question || "Market",
+    description,
+    openGraph: {
+      title: market.question || "Market",
+      description,
+      url: marketUrl,
+      type: "article",
+    },
   };
 }
 

@@ -19,9 +19,19 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mashimarkets.com";
+
 export const metadata: Metadata = {
-  title: "Mashi",
+  metadataBase: new URL(siteUrl),
+  title: "Mashi - Social Prediction Markets",
   description: "Social prediction markets for friend groups",
+  openGraph: {
+    type: "website",
+    siteName: "Mashi",
+    title: "Mashi - Social Prediction Markets",
+    description: "Social prediction markets for friend groups",
+    url: siteUrl,
+  },
 };
 
 export default async function RootLayout({
