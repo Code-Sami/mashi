@@ -5,12 +5,27 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import type { Metadata } from "next";
+import { connectToDatabase } from "@/lib/mongodb";
+import { UserModel } from "@/models/User";
 
 export const dynamic = "force-dynamic";
 
 type UserProfilePageProps = {
   params: Promise<{ userId: string }>;
 };
+
+export async function generateMetadata({ params }: UserProfilePageProps): Promise<Metadata> {
+  const { userId } = await params;
+  await connectToDatabase();
+  const user = await UserModel.findById(userId).lean();
+  const name = user
+    ? (`${user.firstName || ""} ${user.lastName || ""}`.trim() || user.displayName || user.name || "Profile")
+    : "Profile";
+  return {
+    title: `Mashi - ${name}`,
+  };
+}
 
 function activityLabel(item: { type: string; metadata: Record<string, unknown>; marketQuestion: string | null }) {
   if (item.type === "bet_placed") {

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { BotText } from "@/components/bot-text";
 import { GroupHeader } from "@/components/group-header";
 import { LocalDate } from "@/components/local-date";
@@ -8,6 +9,8 @@ import { getGroupPageData } from "@/lib/queries";
 import { getInitials, relativeTime } from "@/lib/utils";
 import { notFound } from "next/navigation";
 import { requireAuthUser } from "@/lib/session";
+import { connectToDatabase } from "@/lib/mongodb";
+import { GroupModel } from "@/models/Group";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +18,15 @@ type PageProps = {
   params: Promise<{ groupId: string }>;
   searchParams: Promise<{ error?: string; info?: string; moderation?: string; reason?: string; logId?: string; canOverride?: string }>;
 };
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { groupId } = await params;
+  await connectToDatabase();
+  const group = await GroupModel.findById(groupId, { name: 1 }).lean();
+  return {
+    title: group?.name || "Group",
+  };
+}
 
 export default async function GroupDetailPage({ params, searchParams }: PageProps) {
   const user = await requireAuthUser();

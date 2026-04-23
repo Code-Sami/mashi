@@ -1,6 +1,11 @@
+import type { Metadata } from "next";
 import { updateProfileAction } from "@/app/actions";
 import { requireAuthUser } from "@/lib/session";
 import { getInitials } from "@/lib/utils";
+
+export const metadata: Metadata = {
+  title: "Mashi - Settings",
+};
 
 export default async function ProfilePage() {
   const user = await requireAuthUser();

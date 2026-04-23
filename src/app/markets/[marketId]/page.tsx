@@ -12,8 +12,10 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { getMarketDetailData } from "@/lib/queries";
 import { GroupMemberModel } from "@/models/GroupMember";
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireAuthUser } from "@/lib/session";
+import { MarketModel } from "@/models/Market";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,15 @@ type MarketPageProps = {
   params: Promise<{ marketId: string }>;
   searchParams: Promise<{ error?: string; resolved?: string }>;
 };
+
+export async function generateMetadata({ params }: MarketPageProps): Promise<Metadata> {
+  const { marketId } = await params;
+  await connectToDatabase();
+  const market = await MarketModel.findById(marketId, { question: 1 }).lean();
+  return {
+    title: market?.question || "Market",
+  };
+}
 
 export default async function MarketPage({ params, searchParams }: MarketPageProps) {
   const user = await requireAuthUser();

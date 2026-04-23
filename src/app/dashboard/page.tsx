@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { MarketQuestionWithMentions } from "@/components/market-question-with-mentions";
 import { getDashboardData } from "@/lib/queries";
 import { ensureSeedData } from "@/lib/seed";
@@ -6,6 +7,9 @@ import { requireAuthUser } from "@/lib/session";
 import { relativeTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  title: "Mashi - Dashboard",
+};
 
 export default async function DashboardPage() {
   const user = await requireAuthUser();

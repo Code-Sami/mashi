@@ -1,10 +1,14 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { markAllNotificationsReadAction, markNotificationReadAction, openNotificationAction } from "@/app/actions";
 import { getNotificationInbox } from "@/lib/notifications";
 import { requireAuthUser } from "@/lib/session";
 import { relativeTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  title: "Mashi - Notifications",
+};
 
 function notificationLabel(item: Awaited<ReturnType<typeof getNotificationInbox>>[number]) {
   switch (item.type) {
