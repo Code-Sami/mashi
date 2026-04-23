@@ -17,7 +17,14 @@ import { MarketPriceHistoryModel } from "@/models/MarketPriceHistory";
 import { JoinRequestModel } from "@/models/JoinRequest";
 import { UserModel } from "@/models/User";
 import { ModerationLogModel } from "@/models/ModerationLog";
+import { NotificationModel } from "@/models/Notification";
 import { moderateQuestion } from "@/lib/moderation";
+import {
+  notifyJoinRequestApproved,
+  notifyJoinRequestSubmitted,
+  notifyMarketCreated,
+  notifyMarketResolvedForBettors,
+} from "@/lib/notifications";
 
 function toBaseUsername(displayName: string, email: string) {
   const fromName = displayName
@@ -267,6 +274,14 @@ export async function createMarketAction(formData: FormData) {
     totalVolume: 0,
     source: "seed",
   });
+  await notifyMarketCreated({
+    marketId: market._id.toString(),
+    groupId,
+    actorUserId: user._id.toString(),
+    question,
+    taggedUserIds: normalizedTagged,
+    umpireId,
+  });
   revalidatePath(`/groups/${groupId}`);
   redirect(`/markets/${market._id.toString()}`);
 }
@@ -341,6 +356,14 @@ export async function overrideModerationAction(formData: FormData) {
     noPrice: 0.5,
     totalVolume: 0,
     source: "seed",
+  });
+  await notifyMarketCreated({
+    marketId: market._id.toString(),
+    groupId: log.groupId.toString(),
+    actorUserId: user._id.toString(),
+    question: log.question,
+    taggedUserIds: normalizedTagged,
+    umpireId,
   });
 
   const gid = log.groupId.toString();
@@ -451,6 +474,15 @@ export async function resolveMarketAction(formData: FormData) {
     marketId: market._id,
     metadata: { outcome },
   });
+  const uniqueBettorIds = [...new Set(bets.map((bet) => bet.userId.toString()))];
+  await notifyMarketResolvedForBettors({
+    marketId: market._id.toString(),
+    groupId: market.groupId.toString(),
+    actorUserId: user._id.toString(),
+    question: market.question,
+    outcome,
+    bettorUserIds: uniqueBettorIds,
+  });
 
   revalidatePath(`/markets/${market._id.toString()}`);
   revalidatePath(`/groups/${market.groupId.toString()}`);
@@ -556,7 +588,12 @@ export async function requestJoinGroupAction(formData: FormData) {
     redirect(`/groups/${groupId}?info=already_requested`);
   }
 
-  await JoinRequestModel.create({ groupId, userId: user._id, status: "pending" });
+  const joinRequest = await JoinRequestModel.create({ groupId, userId: user._id, status: "pending" });
+  await notifyJoinRequestSubmitted({
+    requestId: joinRequest._id.toString(),
+    groupId,
+    actorUserId: user._id.toString(),
+  });
   revalidatePath(`/groups/${groupId}`);
   redirect(`/groups/${groupId}?info=request_sent`);
 }
@@ -587,6 +624,12 @@ export async function approveJoinRequestAction(formData: FormData) {
       metadata: { via: "request_approved" },
     });
   }
+  await notifyJoinRequestApproved({
+    requestId: requestId,
+    groupId: joinReq.groupId.toString(),
+    actorUserId: user._id.toString(),
+    recipientUserId: joinReq.userId.toString(),
+  });
 
   revalidatePath(`/groups/${joinReq.groupId.toString()}`);
 }
@@ -738,4 +781,44 @@ export async function acceptResolutionAction(formData: FormData) {
   revalidatePath(`/markets/${market._id.toString()}`);
   revalidatePath(`/groups/${market.groupId.toString()}`);
   redirect(`/markets/${market._id.toString()}`);
+}
+
+export async function markNotificationReadAction(formData: FormData) {
+  const user = await requireAuthUser();
+  const notificationId = formData.get("notificationId")?.toString() || "";
+  if (!notificationId) throw new Error("Notification id is required.");
+  await connectToDatabase();
+  await NotificationModel.updateOne(
+    { _id: new Types.ObjectId(notificationId), recipientUserId: user._id },
+    { $set: { readAt: new Date() } }
+  );
+  revalidatePath("/notifications");
+}
+
+export async function markAllNotificationsReadAction() {
+  const user = await requireAuthUser();
+  await connectToDatabase();
+  await NotificationModel.updateMany(
+    { recipientUserId: user._id, readAt: null },
+    { $set: { readAt: new Date() } }
+  );
+  revalidatePath("/notifications");
+}
+
+export async function openNotificationAction(formData: FormData) {
+  const user = await requireAuthUser();
+  const notificationId = formData.get("notificationId")?.toString() || "";
+  const target = formData.get("target")?.toString() || "/notifications";
+  if (!notificationId) throw new Error("Notification id is required.");
+
+  await connectToDatabase();
+  await NotificationModel.updateOne(
+    { _id: new Types.ObjectId(notificationId), recipientUserId: user._id },
+    { $set: { readAt: new Date() } }
+  );
+  revalidatePath("/notifications");
+
+  // Prevent open redirects; only allow internal app paths.
+  const safeTarget = target.startsWith("/") ? target : "/notifications";
+  redirect(safeTarget);
 }

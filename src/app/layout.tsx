@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import { getServerSession } from "next-auth";
+import { Analytics } from "@vercel/analytics/next";
 import { authOptions } from "@/lib/auth";
 import { MobileNav } from "@/components/mobile-nav";
 import { SignOutButton } from "@/components/sign-out-button";
+import { ensureExpiredUmpireNotificationsForUser, getUnreadNotificationCount } from "@/lib/notifications";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,10 +30,16 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   let session = null;
+  let unreadNotifications = 0;
   try {
     session = await getServerSession(authOptions);
+    if (session?.user?.id) {
+      await ensureExpiredUmpireNotificationsForUser(session.user.id);
+      unreadNotifications = await getUnreadNotificationCount(session.user.id);
+    }
   } catch {
     session = null;
+    unreadNotifications = 0;
   }
 
   return (
@@ -55,11 +63,16 @@ export default async function RootLayout({
                   <Link href="/groups" className="rounded-lg px-3 py-2 text-white/70 transition hover:bg-white/10 hover:text-white">
                     Groups
                   </Link>
+                  <Link href="/notifications" className="rounded-lg px-3 py-2 text-white/70 transition hover:bg-white/10 hover:text-white">
+                    Notifications
+                    {unreadNotifications > 0 ? (
+                      <span className="ml-1 rounded-full bg-brand px-1.5 py-0.5 text-xs font-bold text-brand-dark">
+                        {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                      </span>
+                    ) : null}
+                  </Link>
                   <Link href={`/users/${session.user.id}`} className="rounded-lg px-3 py-2 text-white/70 transition hover:bg-white/10 hover:text-white">
                     Profile
-                  </Link>
-                  <Link href="/profile" className="rounded-lg px-3 py-2 text-white/70 transition hover:bg-white/10 hover:text-white">
-                    Settings
                   </Link>
                   <SignOutButton />
                 </>
@@ -74,10 +87,15 @@ export default async function RootLayout({
                 </>
               )}
             </nav>
-            <MobileNav isLoggedIn={!!session?.user} userId={session?.user?.id} />
+            <MobileNav
+              isLoggedIn={!!session?.user}
+              userId={session?.user?.id}
+              unreadNotifications={unreadNotifications}
+            />
           </div>
         </header>
         <main className="mx-auto w-full max-w-6xl px-3 py-5 sm:px-4 sm:py-8 md:px-8">{children}</main>
+        <Analytics />
       </body>
     </html>
   );

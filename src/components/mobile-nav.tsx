@@ -8,9 +8,10 @@ import { SignOutButton } from "./sign-out-button";
 type MobileNavProps = {
   userId?: string;
   isLoggedIn: boolean;
+  unreadNotifications?: number;
 };
 
-export function MobileNav({ userId, isLoggedIn }: MobileNavProps) {
+export function MobileNav({ userId, isLoggedIn, unreadNotifications = 0 }: MobileNavProps) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -49,8 +50,11 @@ export function MobileNav({ userId, isLoggedIn }: MobileNavProps) {
               <>
                 <NavLink href="/dashboard" label="Dashboard" />
                 <NavLink href="/groups" label="Groups" />
+                <NavLink
+                  href="/notifications"
+                  label={unreadNotifications > 0 ? `Notifications (${unreadNotifications > 99 ? "99+" : unreadNotifications})` : "Notifications"}
+                />
                 {userId ? <NavLink href={`/users/${userId}`} label="Profile" /> : null}
-                <NavLink href="/profile" label="Settings" />
                 <div className="mt-2 border-t border-white/10 pt-3">
                   <SignOutButton />
                 </div>

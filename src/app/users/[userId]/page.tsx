@@ -3,6 +3,8 @@ import { getPublicUserProfileData } from "@/lib/queries";
 import { getInitials } from "@/lib/utils";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -24,13 +26,16 @@ function activityLabel(item: { type: string; metadata: Record<string, unknown>; 
 
 export default async function PublicUserProfilePage({ params }: UserProfilePageProps) {
   const { userId } = await params;
+  const session = await getServerSession(authOptions);
+  const isOwnProfile = session?.user?.id === userId;
   const data = await getPublicUserProfileData(userId);
   if (!data) notFound();
 
   return (
     <div className="grid gap-6">
       <section className="rounded-2xl border border-border bg-white p-6 shadow-[var(--card-shadow)]">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-lg font-bold text-brand-dark">
             {getInitials(data.user.name)}
           </div>
@@ -55,6 +60,15 @@ export default async function PublicUserProfilePage({ params }: UserProfilePageP
                 : data.user.joinedAt ? <>Joined <LocalDate iso={data.user.joinedAt} style="date" /></> : "Joined recently"}
             </p>
           </div>
+          </div>
+          {isOwnProfile ? (
+            <Link
+              href="/profile"
+              className="shrink-0 rounded-xl border border-border px-3 py-2 text-sm font-medium text-foreground-secondary transition hover:border-brand hover:text-brand-dark"
+            >
+              Settings
+            </Link>
+          ) : null}
         </div>
       </section>
 
