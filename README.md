@@ -16,7 +16,7 @@ Mashi is a social prediction market web app for private friend groups. Create Ye
 
 ### Social Prediction Markets
 - Public marketing landing page with CTAs
-- Email/password authentication (sign up, login, logout)
+- Email/password authentication (sign up, login, logout, forgot/reset password via **Resend**)
 - Public and private groups with invite codes
 - Join requests for private groups (approve/deny by owner)
 - Group owner can remove members
@@ -57,10 +57,18 @@ MONGODB_URI=mongodb://<atlas-user>:<atlas-password>@<host1>:27017,<host2>:27017,
 MONGODB_DB=Mashi
 NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=replace-with-a-long-random-secret
+NEXT_PUBLIC_APP_URL=https://your-production-domain.example
 OPENAI_API_KEY=sk-your-openai-api-key
 GEMINI_API_KEY=your-gemini-api-key
 CRON_SECRET=your-cron-secret
+RESEND_API_KEY=re_your-resend-api-key
+# Optional: verified sender in Resend (defaults otherwise)
+# RESEND_FROM_EMAIL=Mashi <no-reply@your-verified-domain>
 ```
+
+**`NEXT_PUBLIC_APP_URL`** — Public site origin (no trailing slash required). Used for password-reset links in email. Set to `http://localhost:3000` during local dev if you want reset links to open your machine; use your real HTTPS origin in production (the app does not fall back if this is unset—password reset email sending will error until it is defined).
+
+**`RESEND_API_KEY`** — Required to send password reset emails. **`RESEND_FROM_EMAIL`** is optional; if omitted, the code uses a default from-address (override once your domain is verified in [Resend](https://resend.com)).
 
 3. Start development:
 
@@ -83,6 +91,8 @@ The LLM Arena group and its 11 bot users are auto-seeded on first access. Legacy
 | `/` | Landing page |
 | `/login` | Sign in |
 | `/signup` | Create account |
+| `/forgot-password` | Request password reset email |
+| `/reset-password` | Set new password (link from email includes `?token=`) |
 | `/dashboard` | Cross-group stats, expiring markets, activity |
 | `/groups` | Browse and create groups |
 | `/groups/[groupId]` | Group detail: members, markets, leaderboard |
@@ -95,6 +105,8 @@ The LLM Arena group and its 11 bot users are auto-seeded on first access. Legacy
 | Route | Method | Auth | Description |
 |---|---|---|---|
 | `/api/auth/[...nextauth]` | GET/POST | — | NextAuth authentication |
+| `/api/auth/forgot-password` | POST | — | Body `{ "email" }`; always `{ ok: true }` for valid email shape (no enumeration) |
+| `/api/auth/reset-password` | POST | — | Body `{ "token", "newPassword" }`; invalid/expired/reused tokens return a generic error |
 | `/api/llm-tick` | GET | See below | Trigger one LLM Arena tick |
 | `/api/llm-tick` | POST | `Authorization: Bearer <CRON_SECRET>` | Trigger one tick; JSON body is the tick result |
 | `/api/debug-mongo` | GET | — | MongoDB connectivity check |
@@ -111,6 +123,8 @@ src/
     page.tsx                # Landing page
     login/page.tsx
     signup/page.tsx
+    forgot-password/page.tsx
+    reset-password/page.tsx
     dashboard/page.tsx
     groups/page.tsx
     groups/[groupId]/page.tsx
@@ -119,6 +133,8 @@ src/
     profile/page.tsx
     api/
       auth/[...nextauth]/route.ts
+      auth/forgot-password/route.ts
+      auth/reset-password/route.ts
       debug-mongo/route.ts   # Mongo connectivity (GET)
       llm-tick/route.ts      # LLM Arena tick (SSE + JSON)
   components/
@@ -153,6 +169,7 @@ src/
     utils.ts                # Invite code generation, misc
   models/
     User.ts
+    PasswordResetToken.ts
     Group.ts
     GroupMember.ts
     GroupInvite.ts
@@ -172,6 +189,7 @@ vercel.json                # Cron schedule for daily LLM Arena ticks
 | Collection | Key Fields |
 |---|---|
 | `users` | name, email, username, passwordHash, avatarUrl, isBot, botProvider, botModel, botPersona |
+| `passwordresettokens` | userId, tokenHash (SHA-256 of raw token), expiresAt, used; TTL index on `expiresAt` |
 | `groups` | name, description, ownerId, inviteCode, visibility (public/private) |
 | `groupMembers` | groupId, userId, role (owner/admin/member) |
 | `groupInvites` | groupId, code, createdById, expiresAt, isActive |

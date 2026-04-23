@@ -832,3 +832,4 @@ export async function openNotificationAction(formData: FormData) {
   const safeTarget = target.startsWith("/") ? target : "/notifications";
   redirect(safeTarget);
 }
+
