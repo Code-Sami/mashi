@@ -15,7 +15,8 @@ import { GroupMemberModel } from "@/models/GroupMember";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { requireAuthUser } from "@/lib/session";
+import { getAuthUserOrNull } from "@/lib/session";
+import { GroupModel } from "@/models/Group";
 import { MarketModel } from "@/models/Market";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +44,24 @@ export async function generateMetadata({ params }: MarketPageProps): Promise<Met
       },
     };
   }
+
+  const group = await GroupModel.findById(market.groupId, { visibility: 1 }).lean();
+  const isPrivate = (group as { visibility?: string } | null)?.visibility === "private";
+  if (isPrivate) {
+    const title = "Private market on Mashi";
+    const description = "Join the group on Mashi to view this market.";
+    return {
+      title,
+      description,
+      openGraph: {
+        title,
+        description,
+        url: marketUrl,
+        type: "website",
+      },
+    };
+  }
+
   const prices = getPrices(market.yesShares || 0, market.noShares || 0);
   const yesPct = Math.round(prices.yesPrice * 100);
   const noPct = Math.round(prices.noPrice * 100);
@@ -64,28 +83,75 @@ export async function generateMetadata({ params }: MarketPageProps): Promise<Met
 }
 
 export default async function MarketPage({ params, searchParams }: MarketPageProps) {
-  const user = await requireAuthUser();
+  const user = await getAuthUserOrNull();
   const { marketId } = await params;
   const query = await searchParams;
+  await connectToDatabase();
+
+  const marketLean = await MarketModel.findById(marketId, { groupId: 1 }).lean();
+  if (!marketLean) {
+    notFound();
+  }
+  const groupLean = await GroupModel.findById(marketLean.groupId, { name: 1, visibility: 1 }).lean();
+  if (!groupLean) {
+    notFound();
+  }
+  const groupVisibility = (groupLean as { visibility?: string }).visibility || "public";
+  const isPrivateGroup = groupVisibility === "private";
+  const isMember = user
+    ? Boolean(
+        await GroupMemberModel.exists({
+          groupId: marketLean.groupId,
+          userId: user._id,
+        }),
+      )
+    : false;
+
+  if (isPrivateGroup && !isMember) {
+    return (
+      <div className="grid gap-6">
+        <section className="rounded-2xl border border-border bg-white p-8 text-center shadow-[var(--card-shadow)]">
+          <h1 className="text-xl font-bold">Private market</h1>
+          <p className="mt-2 text-sm text-foreground-secondary">
+            This market is only visible to members of{" "}
+            <span className="font-medium text-foreground">{groupLean.name}</span>. Log in and join the group to view details.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <Link href="/login" className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">
+              Log in
+            </Link>
+            <Link
+              href={`/groups/${marketLean.groupId.toString()}`}
+              className="rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground-secondary transition hover:bg-background-secondary"
+            >
+              View group
+            </Link>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   const data = await getMarketDetailData(marketId);
   if (!data) {
     notFound();
   }
-  await connectToDatabase();
-  const isMember = Boolean(
-    await GroupMemberModel.exists({
-      groupId: data.market.groupId,
-      userId: user._id,
-    })
-  );
-  const canResolve = data.market.umpireId === user._id.toString();
-  const isGroupOwner = data.groupOwnerId === user._id.toString();
+  const canResolve = Boolean(user && data.market.umpireId === user._id.toString());
+  const isGroupOwner = Boolean(user && data.groupOwnerId === user._id.toString());
   const hasBets = data.bets.length > 0;
-  const isExcludedFromBetting = (data.market.excludedUserIds || []).includes(user._id.toString());
+  const isExcludedFromBetting = Boolean(
+    user && (data.market.excludedUserIds || []).includes(user._id.toString()),
+  );
   const isPastDeadline = new Date(data.market.deadline).getTime() < Date.now();
   const userMap = new Map(data.users.map((u) => [u.id, u]));
   const isBotMarket = data.groupName === "LLM Arena";
-  const canBet = data.market.status === "open" && isMember && !isExcludedFromBetting && !isPastDeadline && !isBotMarket;
+  const canBet =
+    Boolean(user) &&
+    data.market.status === "open" &&
+    isMember &&
+    !isExcludedFromBetting &&
+    !isPastDeadline &&
+    !isBotMarket;
   const errorMessage =
     query.error === "not_member"
       ? "Join this market's group before placing a bet."
@@ -102,7 +168,7 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
                 : "";
 
   const isResolved = data.market.status === "resolved" && !!data.market.outcome;
-  const showSettlementPopup = query.resolved === "true" && isResolved;
+  const showSettlementPopup = Boolean(user && query.resolved === "true" && isResolved);
   const settlementEntries = isResolved
     ? data.bets.map((bet) => {
         const actor = userMap.get(bet.userId);
@@ -231,6 +297,27 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
                 <span className="rounded-lg bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-700">Waiting for bots...</span>
               )}
               <span className="rounded-lg bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-700">${data.market.totalVolume.toFixed(2)} volume</span>
+            </div>
+          </article>
+        ) : !user ? (
+          <article className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6">
+            <h2 className="font-semibold">Place a bet</h2>
+            <p className="mt-2 text-sm text-foreground-secondary">
+              Log in or create an account, join this group, and you can bet on this market.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href={`/login?callbackUrl=${encodeURIComponent(`/markets/${data.market.id}`)}`}
+                className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover"
+              >
+                Log in
+              </Link>
+              <Link
+                href={`/signup?callbackUrl=${encodeURIComponent(`/markets/${data.market.id}`)}`}
+                className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-foreground-secondary transition hover:bg-background-secondary"
+              >
+                Sign up
+              </Link>
             </div>
           </article>
         ) : (

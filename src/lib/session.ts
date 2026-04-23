@@ -18,3 +18,14 @@ export async function requireAuthUser() {
   }
   return user;
 }
+
+/** Session user doc, or null (no redirect). Use for pages that must work for link previews / logged-out visitors. */
+export async function getAuthUserOrNull() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return null;
+  }
+  await connectToDatabase();
+  const user = await UserModel.findById(session.user.id).lean();
+  return user || null;
+}

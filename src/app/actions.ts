@@ -19,6 +19,7 @@ import { UserModel } from "@/models/User";
 import { ModerationLogModel } from "@/models/ModerationLog";
 import { NotificationModel } from "@/models/Notification";
 import { moderateQuestion } from "@/lib/moderation";
+import { safeInternalPath } from "@/lib/safe-internal-path";
 import {
   notifyJoinRequestApproved,
   notifyJoinRequestSubmitted,
@@ -59,9 +60,12 @@ export async function signupAction(formData: FormData) {
   const displayName = `${firstName} ${lastName}`.trim();
   const email = formData.get("email")?.toString().trim().toLowerCase() || "";
   const password = formData.get("password")?.toString() || "";
+  const callbackUrl = safeInternalPath(formData.get("callbackUrl")?.toString()) || "";
 
   if (!firstName || !lastName || !email || !password || password.length < 8) {
-    redirect("/signup?error=invalid");
+    const q = new URLSearchParams({ error: "invalid" });
+    if (callbackUrl) q.set("callbackUrl", callbackUrl);
+    redirect(`/signup?${q}`);
   }
 
   const conn = await connectToDatabase();
@@ -87,9 +91,13 @@ export async function signupAction(formData: FormData) {
           },
         }
       );
-      redirect("/login?created=1");
+      const q = new URLSearchParams({ created: "1" });
+      if (callbackUrl) q.set("callbackUrl", callbackUrl);
+      redirect(`/login?${q}`);
     }
-    redirect("/signup?error=taken");
+    const qTaken = new URLSearchParams({ error: "taken" });
+    if (callbackUrl) qTaken.set("callbackUrl", callbackUrl);
+    redirect(`/signup?${qTaken}`);
   }
 
   const username = await generateUniqueUsername(displayName, email);
@@ -105,7 +113,9 @@ export async function signupAction(formData: FormData) {
     createdAt: new Date(),
     updatedAt: new Date(),
   });
-  redirect("/login?created=1");
+  const q = new URLSearchParams({ created: "1" });
+  if (callbackUrl) q.set("callbackUrl", callbackUrl);
+  redirect(`/login?${q}`);
 }
 
 export async function createGroupAction(formData: FormData) {

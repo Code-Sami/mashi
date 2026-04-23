@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { signupAction } from "@/app/actions";
+import { safeInternalPath } from "@/lib/safe-internal-path";
 
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; callbackUrl?: string }>;
 }) {
   const query = await searchParams;
+  const callbackUrl = safeInternalPath(query.callbackUrl) || "";
   const errorMessage =
     query.error === "taken"
       ? "Email is already in use."
@@ -20,6 +22,7 @@ export default async function SignupPage({
       <p className="mt-1 text-sm text-foreground-secondary">Start prediction markets with your friends.</p>
       {errorMessage ? <p className="mt-3 rounded-xl bg-decrease/10 p-3 text-sm text-decrease">{errorMessage}</p> : null}
       <form action={signupAction} className="mt-6 grid gap-3">
+        {callbackUrl ? <input type="hidden" name="callbackUrl" value={callbackUrl} /> : null}
         <input name="firstName" required placeholder="First name" className="rounded-xl border border-border bg-background-secondary p-3 transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20" />
         <input name="lastName" required placeholder="Last name" className="rounded-xl border border-border bg-background-secondary p-3 transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20" />
         <input name="email" type="email" required placeholder="Email" className="rounded-xl border border-border bg-background-secondary p-3 transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20" />
@@ -28,7 +31,10 @@ export default async function SignupPage({
       </form>
       <p className="mt-4 text-sm text-foreground-secondary">
         Already have an account?{" "}
-        <Link className="font-semibold text-brand-dark underline" href="/login">
+        <Link
+          className="font-semibold text-brand-dark underline"
+          href={callbackUrl ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : "/login"}
+        >
           Log in
         </Link>
       </p>

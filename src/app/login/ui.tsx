@@ -2,10 +2,17 @@
 
 import Link from "next/link";
 import { signIn } from "next-auth/react";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useMemo, useState } from "react";
+import { safeInternalPath } from "@/lib/safe-internal-path";
 
 export default function LoginClient() {
   const [error, setError] = useState("");
+  const searchParams = useSearchParams();
+  const returnTo = useMemo(() => {
+    const raw = searchParams.get("callbackUrl");
+    return safeInternalPath(raw) || "/dashboard";
+  }, [searchParams]);
 
   return (
     <div className="mx-auto max-w-md rounded-2xl border border-border bg-white p-8 shadow-[var(--card-shadow)]">
@@ -20,14 +27,14 @@ export default function LoginClient() {
           const result = await signIn("credentials", {
             email: form.get("email"),
             password: form.get("password"),
-            callbackUrl: "/dashboard",
+            callbackUrl: returnTo,
             redirect: false,
           });
           if (result?.error) {
             setError("Invalid email or password.");
             return;
           }
-          window.location.href = "/dashboard";
+          window.location.href = returnTo;
         }}
       >
         <input name="email" type="email" required placeholder="Email" className="rounded-xl border border-border bg-background-secondary p-3 transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20" />
@@ -37,7 +44,10 @@ export default function LoginClient() {
       {error ? <p className="mt-3 text-sm text-decrease">{error}</p> : null}
       <p className="mt-4 text-sm text-foreground-secondary">
         No account?{" "}
-        <Link className="font-semibold text-brand-dark underline" href="/signup">
+        <Link
+          className="font-semibold text-brand-dark underline"
+          href={returnTo !== "/dashboard" ? `/signup?callbackUrl=${encodeURIComponent(returnTo)}` : "/signup"}
+        >
           Sign up
         </Link>
       </p>
