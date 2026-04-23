@@ -40,11 +40,13 @@ function detectTaggedMembers(question: string, members: MemberOption[]) {
 export function CreateMarketForm({ groupId, members }: CreateMarketFormProps) {
   const questionRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const submittingRef = useRef(false);
   const [question, setQuestion] = useState("");
   const [taggedUserIds, setTaggedUserIds] = useState<string[]>([]);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionAtIndex, setMentionAtIndex] = useState<number | null>(null);
   const [ready, setReady] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const taggedSet = useMemo(() => new Set(taggedUserIds), [taggedUserIds]);
   const suggestionList = useMemo(() => {
@@ -94,7 +96,16 @@ export function CreateMarketForm({ groupId, members }: CreateMarketFormProps) {
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    if (ready) return;
+    if (ready) {
+      return;
+    }
+
+    if (submittingRef.current) {
+      event.preventDefault();
+      return;
+    }
+    submittingRef.current = true;
+    setIsSubmitting(true);
     event.preventDefault();
     const finalTagged = detectTaggedMembers(question, members);
     setTaggedUserIds(finalTagged);
@@ -152,7 +163,24 @@ export function CreateMarketForm({ groupId, members }: CreateMarketFormProps) {
         <input type="checkbox" name="excludeUmpire" className="h-4 w-4 rounded border-border accent-brand" />
         Exclude umpire from betting
       </label>
-      <button className="rounded-xl bg-brand px-4 py-2.5 font-semibold text-brand-dark transition hover:bg-brand-hover md:col-span-2">Create market</button>
+      <button
+        type="submit"
+        disabled={isSubmitting}
+        aria-disabled={isSubmitting}
+        className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 font-semibold text-brand-dark transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-70 md:col-span-2"
+      >
+        {isSubmitting ? (
+          <>
+            <span
+              className="h-4 w-4 animate-spin rounded-full border-2 border-brand-dark/40 border-t-brand-dark"
+              aria-hidden="true"
+            />
+            Creating...
+          </>
+        ) : (
+          "Create market"
+        )}
+      </button>
     </form>
   );
 }
