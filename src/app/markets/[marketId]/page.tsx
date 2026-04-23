@@ -1,3 +1,4 @@
+import { requestJoinGroupAction } from "@/app/actions";
 import { BetForm } from "@/components/bet-form";
 import { BotText } from "@/components/bot-text";
 import { DeleteMarketButton } from "@/components/delete-market-button";
@@ -12,6 +13,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { getPrices } from "@/lib/market";
 import { getMarketDetailData } from "@/lib/queries";
 import { GroupMemberModel } from "@/models/GroupMember";
+import { JoinRequestModel } from "@/models/JoinRequest";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -107,25 +109,73 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
       )
     : false;
 
+  const myPendingJoinRequest =
+    user && isPrivateGroup && !isMember
+      ? Boolean(
+          await JoinRequestModel.exists({
+            groupId: marketLean.groupId,
+            userId: user._id,
+            status: "pending",
+          }),
+        )
+      : false;
+
   if (isPrivateGroup && !isMember) {
+    const returnPath = `/markets/${marketId}`;
     return (
       <div className="grid gap-6">
         <section className="rounded-2xl border border-border bg-white p-8 text-center shadow-[var(--card-shadow)]">
           <h1 className="text-xl font-bold">Private market</h1>
           <p className="mt-2 text-sm text-foreground-secondary">
             This market is only visible to members of{" "}
-            <span className="font-medium text-foreground">{groupLean.name}</span>. Log in and join the group to view details.
+            <span className="font-medium text-foreground">{groupLean.name}</span>.
+            {user ? (
+              <> Request to join the private group, then you can open this market again once you&apos;re a member.</>
+            ) : (
+              <> Sign up or log in, then you can request to join the private group and view this market.</>
+            )}
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <Link href="/login" className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">
-              Log in
-            </Link>
-            <Link
-              href={`/groups/${marketLean.groupId.toString()}`}
-              className="rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground-secondary transition hover:bg-background-secondary"
-            >
-              View group
-            </Link>
+            {user ? (
+              <>
+                {myPendingJoinRequest ? (
+                  <span className="rounded-xl bg-foreground-tertiary/20 px-4 py-2.5 text-sm font-medium text-foreground-secondary">
+                    Request pending
+                  </span>
+                ) : (
+                  <form action={requestJoinGroupAction}>
+                    <input type="hidden" name="groupId" value={marketLean.groupId.toString()} />
+                    <button
+                      type="submit"
+                      className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover"
+                    >
+                      Request to join
+                    </button>
+                  </form>
+                )}
+                <Link
+                  href={`/groups/${marketLean.groupId.toString()}`}
+                  className="inline-flex items-center rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground-secondary transition hover:bg-background-secondary"
+                >
+                  View group
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  href={`/login?callbackUrl=${encodeURIComponent(returnPath)}`}
+                  className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover"
+                >
+                  Log in
+                </Link>
+                <Link
+                  href={`/signup?callbackUrl=${encodeURIComponent(returnPath)}`}
+                  className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-foreground-secondary transition hover:bg-background-secondary"
+                >
+                  Sign up
+                </Link>
+              </>
+            )}
           </div>
         </section>
       </div>
