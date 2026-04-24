@@ -291,7 +291,7 @@ export async function runLlmTick(
   const activeMarkets = openMarkets.filter(
     (m) => new Date(m.deadline).getTime() > Date.now(),
   );
-  const shouldCreate = activeMarkets.length === 0 || (activeMarkets.length < 6 && Math.random() < 0.5);
+  const shouldCreate = activeMarkets.length === 0 || (activeMarkets.length < 5 && Math.random() < 0.5);
   if (shouldCreate) {
     const recentMarkets = await MarketModel.find({ groupId })
       .sort({ createdAt: -1 })
