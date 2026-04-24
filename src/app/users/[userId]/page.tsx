@@ -29,9 +29,18 @@ export async function generateMetadata({ params }: UserProfilePageProps): Promis
 
 function activityLabel(item: { type: string; metadata: Record<string, unknown>; marketQuestion: string | null }) {
   if (item.type === "bet_placed") {
-    const side = item.metadata?.side ? String(item.metadata.side).toUpperCase() : "N/A";
+    const sideRaw = item.metadata?.side ? String(item.metadata.side).toLowerCase() : "";
+    const side = sideRaw === "yes" || sideRaw === "no" ? sideRaw : "";
     const amount = item.metadata?.amount ? `$${Number(item.metadata.amount).toFixed(2)}` : "$0.00";
-    return `Bet ${side} ${amount}`;
+    return (
+      <>
+        <span>Bet </span>
+        <span className={side === "yes" ? "text-yes font-semibold" : side === "no" ? "text-no font-semibold" : ""}>
+          {side ? side.toUpperCase() : "N/A"}
+        </span>
+        <span> {amount}</span>
+      </>
+    );
   }
   if (item.type === "market_created") return "Created market";
   if (item.type === "market_resolved") return "Resolved market";
@@ -133,7 +142,8 @@ export default async function PublicUserProfilePage({ params }: UserProfilePageP
                 <Link key={bet.id} href={`/markets/${bet.marketId}`} className="rounded-xl border border-border p-3 transition hover:border-brand hover:shadow-sm">
                   <p className="font-medium">{bet.marketQuestion}</p>
                   <p className="mt-1 text-sm text-foreground-secondary">
-                    <span className={bet.side === "yes" ? "text-yes" : "text-no"}>{bet.side.toUpperCase()}</span> · Stake ${bet.amount.toFixed(2)} · Outcome {bet.outcome.toUpperCase()}
+                    <span className={bet.side === "yes" ? "text-yes" : "text-no"}>{bet.side.toUpperCase()}</span> · Stake ${bet.amount.toFixed(2)} · Outcome{" "}
+                    <span className={bet.outcome === "yes" ? "text-yes" : "text-no"}>{bet.outcome.toUpperCase()}</span>
                   </p>
                   <p className={`text-sm font-semibold ${bet.result === "win" ? "text-increase" : "text-decrease"}`}>
                     {bet.result === "win" ? "WIN" : "LOSS"} · Payout ${bet.payout.toFixed(2)} · P/L {bet.pnl >= 0 ? "+" : ""}${bet.pnl.toFixed(2)}
@@ -158,7 +168,13 @@ export default async function PublicUserProfilePage({ params }: UserProfilePageP
                   <p className="font-medium">{market.question}</p>
                   <p className="text-sm text-foreground-secondary">
                     {market.groupName} · {market.status}
-                    {market.outcome ? ` (${market.outcome.toUpperCase()})` : ""}
+                    {market.outcome ? (
+                      <>
+                        {" ("}
+                        <span className={market.outcome === "yes" ? "text-yes" : "text-no"}>{market.outcome.toUpperCase()}</span>
+                        {")"}
+                      </>
+                    ) : null}
                   </p>
                 </Link>
               ))
