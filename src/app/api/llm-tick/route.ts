@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectToDatabase } from "@/lib/mongodb";
 import { GroupModel } from "@/models/Group";
+import { isEffectiveGroupOwner } from "@/lib/super-admin";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -22,7 +23,7 @@ async function isSessionOwner(): Promise<boolean> {
   await connectToDatabase();
   const group = await GroupModel.findOne({ name: "LLM Arena" }).lean();
   if (!group) return false;
-  return group.ownerId.toString() === userId;
+  return isEffectiveGroupOwner(userId, group.ownerId.toString());
 }
 
 export async function GET(request: NextRequest) {

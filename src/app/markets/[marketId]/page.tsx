@@ -18,6 +18,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getAuthUserOrNull } from "@/lib/session";
+import { isEffectiveGroupOwner } from "@/lib/super-admin";
 import { GroupModel } from "@/models/Group";
 import { MarketModel } from "@/models/Market";
 
@@ -187,7 +188,9 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
     notFound();
   }
   const canResolve = Boolean(user && data.market.umpireId === user._id.toString());
-  const isGroupOwner = Boolean(user && data.groupOwnerId === user._id.toString());
+  const isGroupOwner = Boolean(
+    user && data.groupOwnerId && isEffectiveGroupOwner(user._id.toString(), data.groupOwnerId)
+  );
   const hasBets = data.bets.length > 0;
   const isExcludedFromBetting = Boolean(
     user && (data.market.excludedUserIds || []).includes(user._id.toString()),

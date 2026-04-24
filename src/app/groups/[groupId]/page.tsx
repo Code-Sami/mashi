@@ -6,6 +6,7 @@ import { LocalDate } from "@/components/local-date";
 import { MarketGearMenu } from "@/components/market-gear-menu";
 import { MarketQuestionWithMentions } from "@/components/market-question-with-mentions";
 import { getGroupPageData } from "@/lib/queries";
+import { isEffectiveGroupOwner } from "@/lib/super-admin";
 import { getInitials, relativeTime } from "@/lib/utils";
 import { notFound } from "next/navigation";
 import { requireAuthUser } from "@/lib/session";
@@ -35,7 +36,7 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
   const data = await getGroupPageData(groupId, user._id.toString());
   if (!data) notFound();
   const memberNameById = new Map(data.members.map((member) => [member.userId, member.name]));
-  const isOwner = data.group.ownerId === user._id.toString();
+  const isOwner = isEffectiveGroupOwner(user._id.toString(), data.group.ownerId);
   const canView = data.group.isMember || data.group.visibility === "public";
 
   const infoMessage =

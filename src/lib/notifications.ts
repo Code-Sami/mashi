@@ -1,6 +1,10 @@
 import "server-only";
+import type { UpdateResult } from "mongodb";
 import { Types } from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
+import { appBaseUrl } from "@/lib/password-reset-email";
+import { sendJoinRequestDecisionEmail, sendJoinRequestSubmittedEmail } from "@/lib/join-request-email";
+import { sendUmpireMarketDueEmail } from "@/lib/umpire-due-email";
 import { GroupModel } from "@/models/Group";
 import { MarketModel } from "@/models/Market";
 import { NotificationModel } from "@/models/Notification";
@@ -12,7 +16,8 @@ type NotificationType =
   | "umpire_market_expired"
   | "market_bet_resolved"
   | "group_join_request_submitted"
-  | "group_join_request_approved";
+  | "group_join_request_approved"
+  | "group_join_request_denied";
 
 type NotifyInput = {
   recipientUserId: string;
@@ -24,8 +29,8 @@ type NotifyInput = {
   payload?: Record<string, unknown>;
 };
 
-async function createNotification(input: NotifyInput) {
-  await NotificationModel.updateOne(
+async function upsertNotification(input: NotifyInput): Promise<boolean> {
+  const result = (await NotificationModel.updateOne(
     { dedupeKey: input.dedupeKey },
     {
       $setOnInsert: {
@@ -40,7 +45,12 @@ async function createNotification(input: NotifyInput) {
       },
     },
     { upsert: true }
-  );
+  )) as UpdateResult;
+  return result.upsertedCount > 0;
+}
+
+async function createNotification(input: NotifyInput) {
+  await upsertNotification(input);
 }
 
 export async function notifyMarketCreated(params: {
@@ -92,12 +102,12 @@ export async function notifyJoinRequestSubmitted(params: {
   actorUserId: string;
 }) {
   await connectToDatabase();
-  const group = await GroupModel.findById(params.groupId, { ownerId: 1 }).lean();
+  const group = await GroupModel.findById(params.groupId, { ownerId: 1, name: 1 }).lean();
   if (!group) return;
   const ownerId = group.ownerId.toString();
   if (ownerId === params.actorUserId) return;
 
-  await createNotification({
+  const inserted = await upsertNotification({
     recipientUserId: ownerId,
     actorUserId: params.actorUserId,
     groupId: params.groupId,
@@ -105,23 +115,66 @@ export async function notifyJoinRequestSubmitted(params: {
     dedupeKey: `group_join_request_submitted:${params.requestId}:${ownerId}`,
     payload: {},
   });
+
+  if (!inserted) return;
+  const [owner, actor] = await Promise.all([
+    UserModel.findById(ownerId).select("email isBot joinRequestOwnerEmailEnabled").lean(),
+    UserModel.findById(params.actorUserId).select("firstName lastName displayName name").lean(),
+  ]);
+  if (!owner?.email || owner.isBot || owner.joinRequestOwnerEmailEnabled === false) return;
+
+  const actorName = fullName(actor || {});
+  try {
+    await sendJoinRequestSubmittedEmail({
+      to: owner.email,
+      recipientUserId: ownerId,
+      actorName,
+      groupName: group.name || "your group",
+      groupUrl: `${appBaseUrl()}/groups/${params.groupId}`,
+    });
+  } catch (e) {
+    console.error("[notifications] join request submitted email failed:", e);
+  }
 }
 
-export async function notifyJoinRequestApproved(params: {
+export async function notifyJoinRequestDecision(params: {
   requestId: string;
   groupId: string;
   actorUserId: string;
   recipientUserId: string;
+  approved: boolean;
 }) {
   await connectToDatabase();
-  await createNotification({
+  const notifType = params.approved ? "group_join_request_approved" : "group_join_request_denied";
+  const inserted = await upsertNotification({
     recipientUserId: params.recipientUserId,
     actorUserId: params.actorUserId,
     groupId: params.groupId,
-    type: "group_join_request_approved",
-    dedupeKey: `group_join_request_approved:${params.requestId}:${params.recipientUserId}`,
+    type: notifType,
+    dedupeKey: `${notifType}:${params.requestId}:${params.recipientUserId}`,
     payload: {},
   });
+  if (!inserted) return;
+
+  const [recipient, group] = await Promise.all([
+    UserModel.findById(params.recipientUserId)
+      .select("email isBot joinRequestDecisionEmailEnabled")
+      .lean(),
+    GroupModel.findById(params.groupId).select("name").lean(),
+  ]);
+  if (!recipient?.email || recipient.isBot || recipient.joinRequestDecisionEmailEnabled === false) return;
+
+  try {
+    await sendJoinRequestDecisionEmail({
+      to: recipient.email,
+      recipientUserId: params.recipientUserId,
+      groupName: group?.name || "this group",
+      groupUrl: `${appBaseUrl()}/groups/${params.groupId}`,
+      approved: params.approved,
+    });
+  } catch (e) {
+    console.error("[notifications] join request decision email failed:", e);
+  }
 }
 
 export async function notifyMarketResolvedForBettors(params: {
@@ -163,16 +216,41 @@ export async function ensureExpiredUmpireNotificationsForUser(userId: string) {
     .lean();
 
   await Promise.all(
-    expiredMarkets.map((market) =>
-      createNotification({
+    expiredMarkets.map(async (market) => {
+      const dedupeKey = `umpire_market_expired:${market._id.toString()}:${userId}`;
+      const inserted = await upsertNotification({
         recipientUserId: userId,
         groupId: market.groupId.toString(),
         marketId: market._id.toString(),
         type: "umpire_market_expired",
-        dedupeKey: `umpire_market_expired:${market._id.toString()}:${userId}`,
+        dedupeKey,
         payload: { question: market.question },
-      })
-    )
+      });
+      if (!inserted) return;
+
+      let marketUrl: string;
+      try {
+        marketUrl = `${appBaseUrl()}/markets/${market._id.toString()}`;
+      } catch (e) {
+        console.warn("[notifications] umpire due email skipped (NEXT_PUBLIC_APP_URL):", e);
+        return;
+      }
+
+      const umpire = await UserModel.findById(userId)
+        .select("email isBot umpireReminderEmailEnabled")
+        .lean();
+      if (!umpire?.email || umpire.isBot) return;
+      if (umpire.umpireReminderEmailEnabled === false) return;
+
+      try {
+        await sendUmpireMarketDueEmail(umpire.email, {
+          marketUrl,
+          question: market.question,
+        });
+      } catch (e) {
+        console.error("[notifications] umpire due email failed:", e);
+      }
+    })
   );
 }
 

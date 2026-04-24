@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 import { markAllNotificationsReadAction, markNotificationReadAction, openNotificationAction } from "@/app/actions";
 import { getNotificationInbox } from "@/lib/notifications";
@@ -10,26 +9,56 @@ export const metadata: Metadata = {
   title: "Mashi - Notifications",
 };
 
-function notificationLabel(item: Awaited<ReturnType<typeof getNotificationInbox>>[number]) {
+type NotificationInboxItem = Awaited<ReturnType<typeof getNotificationInbox>>[number];
+
+function NotificationMessage({ item }: { item: NotificationInboxItem }) {
+  const p = "text-sm font-medium";
+
   switch (item.type) {
     case "market_tagged":
-      return `${item.actorName || "Someone"} tagged you in ${item.marketQuestion || "a market"}`;
+      return <p className={p}>{`${item.actorName || "Someone"} tagged you in ${item.marketQuestion || "a market"}`}</p>;
     case "umpire_assigned":
-      return `${item.actorName || "Someone"} assigned you as umpire for ${item.marketQuestion || "a market"}`;
+      return (
+        <p className={p}>
+          {`${item.actorName || "Someone"} made you umpire for ${item.marketQuestion || "a market"}. Open the market and resolve it when the outcome is known.`}
+        </p>
+      );
     case "umpire_market_expired":
-      return `Your umpire market expired: ${item.marketQuestion || "a market"}`;
-    case "market_bet_resolved":
-      return `${item.marketQuestion || "A market"} was resolved (${String(item.payload?.outcome || "").toUpperCase()})`;
+      return (
+        <p className={p}>
+          {`Deadline passed on ${item.marketQuestion || "a market"} — you are the umpire. Open the market and resolve it now!`}
+        </p>
+      );
+    case "market_bet_resolved": {
+      const raw = String(item.payload?.outcome || "").toLowerCase();
+      const side = raw === "yes" || raw === "no" ? raw : null;
+      return (
+        <p className={p}>
+          <span>{item.marketQuestion || "A market"} was resolved </span>
+          {side ? (
+            <span
+              className={`inline-block rounded-md px-2 py-0.5 align-baseline text-xs font-bold uppercase tracking-wide ${side === "yes" ? "bg-yes-bg text-yes" : "bg-no-bg text-no"}`}
+            >
+              {side === "yes" ? "YES" : "NO"}
+            </span>
+          ) : (
+            <span className="text-foreground-secondary">(outcome unknown)</span>
+          )}
+        </p>
+      );
+    }
     case "group_join_request_submitted":
-      return `${item.actorName || "Someone"} requested to join ${item.groupName || "your group"}`;
+      return <p className={p}>{`${item.actorName || "Someone"} requested to join ${item.groupName || "your group"}`}</p>;
     case "group_join_request_approved":
-      return `Your request to join ${item.groupName || "this group"} was approved`;
+      return <p className={p}>{`Your request to join ${item.groupName || "this group"} was approved`}</p>;
+    case "group_join_request_denied":
+      return <p className={p}>{`Your request to join ${item.groupName || "this group"} was denied`}</p>;
     default:
-      return "New activity";
+      return <p className={p}>New activity</p>;
   }
 }
 
-function notificationHref(item: Awaited<ReturnType<typeof getNotificationInbox>>[number]) {
+function notificationHref(item: NotificationInboxItem) {
   if (item.marketId) return `/markets/${item.marketId}`;
   if (item.groupId) return `/groups/${item.groupId}`;
   return "/dashboard";
@@ -74,7 +103,7 @@ export default async function NotificationsPage() {
                   <input type="hidden" name="notificationId" value={item.id} />
                   <input type="hidden" name="target" value={notificationHref(item)} />
                   <button type="submit" className="block w-full cursor-pointer rounded-md text-left transition hover:opacity-90">
-                    <p className="text-sm font-medium">{notificationLabel(item)}</p>
+                    <NotificationMessage item={item} />
                     <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-foreground-tertiary">
                       {item.createdAt ? <span>{relativeTime(item.createdAt)}</span> : null}
                     </div>

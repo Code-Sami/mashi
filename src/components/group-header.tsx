@@ -352,39 +352,6 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
         <div className="border-t border-border px-4 pb-6 pt-5 sm:px-6">
           <div className="grid gap-6 md:grid-cols-2">
             <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-tertiary">Settings</h2>
-              <form action={updateGroupAction} className="mt-3 grid gap-3">
-                <input type="hidden" name="groupId" value={group.id} />
-                <div>
-                  <label className="text-sm font-medium text-foreground-secondary">Name</label>
-                  <input name="name" defaultValue={group.name} required className="mt-1 w-full rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-foreground-secondary">Visibility</label>
-                  <select name="visibility" defaultValue={group.visibility} className="mt-1 w-full rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
-                    <option value="public">Public — anyone can join</option>
-                    <option value="private">Private — request to join</option>
-                  </select>
-                </div>
-                <button className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">Save changes</button>
-              </form>
-              <form
-                action={deleteGroupAction}
-                className="mt-4 border-t border-border-light pt-4"
-                onSubmit={(e) => {
-                  if (!confirm("Delete this group and all its markets, bets, and activity? This cannot be undone.")) {
-                    e.preventDefault();
-                  }
-                }}
-              >
-                <input type="hidden" name="groupId" value={group.id} />
-                <button className="rounded-xl border border-decrease/30 px-4 py-2 text-sm font-medium text-decrease transition hover:bg-decrease/10">
-                  Delete group
-                </button>
-              </form>
-            </div>
-
-            <div>
               <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-tertiary">
                 Join requests
                 {pendingRequests.length > 0 ? (
@@ -422,6 +389,39 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
                   ))
                 )}
               </div>
+            </div>
+
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground-tertiary">Settings</h2>
+              <form action={updateGroupAction} className="mt-3 grid gap-3">
+                <input type="hidden" name="groupId" value={group.id} />
+                <div>
+                  <label className="text-sm font-medium text-foreground-secondary">Name</label>
+                  <input name="name" defaultValue={group.name} required className="mt-1 w-full rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground-secondary">Visibility</label>
+                  <select name="visibility" defaultValue={group.visibility} className="mt-1 w-full rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
+                    <option value="public">Public — anyone can join</option>
+                    <option value="private">Private — request to join</option>
+                  </select>
+                </div>
+                <button className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">Save changes</button>
+              </form>
+              <form
+                action={deleteGroupAction}
+                className="mt-4 border-t border-border-light pt-4"
+                onSubmit={(e) => {
+                  if (!confirm("Delete this group and all its markets, bets, and activity? This cannot be undone.")) {
+                    e.preventDefault();
+                  }
+                }}
+              >
+                <input type="hidden" name="groupId" value={group.id} />
+                <button className="rounded-xl border border-decrease/30 px-4 py-2 text-sm font-medium text-decrease transition hover:bg-decrease/10">
+                  Delete group
+                </button>
+              </form>
             </div>
           </div>
 

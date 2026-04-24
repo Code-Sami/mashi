@@ -34,6 +34,7 @@ const notificationSchema = new Schema(
         "market_bet_resolved",
         "group_join_request_submitted",
         "group_join_request_approved",
+        "group_join_request_denied",
       ],
       required: true,
       index: true,

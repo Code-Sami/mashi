@@ -12,6 +12,7 @@ import { MarketPriceHistoryModel } from "@/models/MarketPriceHistory";
 import { JoinRequestModel } from "@/models/JoinRequest";
 import { UserModel } from "@/models/User";
 import { ModerationLogModel } from "@/models/ModerationLog";
+import { isEffectiveGroupOwner } from "@/lib/super-admin";
 
 function fullName(user: {
   firstName?: string;
@@ -421,7 +422,8 @@ export async function getGroupPageData(groupId: string, userId: string) {
     priceHistoryByMarketId.set(key, series);
   }
 
-  const isOwner = (group.ownerId?.toString?.() || fallbackOwnerId) === userId;
+  const actualOwnerId = group.ownerId?.toString?.() || fallbackOwnerId;
+  const isOwner = isEffectiveGroupOwner(userId, actualOwnerId);
   const pendingRequests = isOwner
     ? await (async () => {
         const reqs = await JoinRequestModel.find({ groupId, status: "pending" }).lean();

@@ -64,11 +64,19 @@ CRON_SECRET=your-cron-secret
 RESEND_API_KEY=re_your-resend-api-key
 # Optional: verified sender in Resend (defaults otherwise)
 # RESEND_FROM_EMAIL=Mashi <no-reply@your-verified-domain>
+# Optional but recommended: dedicated signing key for one-click email unsubscribe links
+# EMAIL_UNSUBSCRIBE_SECRET=replace-with-a-long-random-secret
+# Optional: comma-separated User _id values — full group-owner powers everywhere
+# SUPER_ADMIN_USER_IDS=64f0a1b2c3d4e5f6a7b8c9d0,64f0a1b2c3d4e5f6a7b8c9d1
 ```
 
 **`NEXT_PUBLIC_APP_URL`** — Public site origin (no trailing slash required). Used for password-reset links in email. Set to `http://localhost:3000` during local dev if you want reset links to open your machine; use your real HTTPS origin in production (the app does not fall back if this is unset—password reset email sending will error until it is defined).
 
-**`RESEND_API_KEY`** — Required to send password reset emails. **`RESEND_FROM_EMAIL`** is optional; if omitted, the code uses a default from-address (override once your domain is verified in [Resend](https://resend.com)).
+**`RESEND_API_KEY`** — Required to send **password reset** and **umpire “deadline passed”** emails (after a market’s deadline, the assigned human umpire gets one Resend message per market, with a link to resolve). **`RESEND_FROM_EMAIL`** is optional; if omitted, the code uses a default from-address (override once your domain is verified in [Resend](https://resend.com)).
+
+**`EMAIL_UNSUBSCRIBE_SECRET`** — Optional but recommended. Used to sign one-click unsubscribe links in email notifications. If unset, the app falls back to `NEXTAUTH_SECRET`.
+
+**`SUPER_ADMIN_USER_IDS`** — Optional. Comma-separated `users` document `_id` strings (hex). Those accounts pass every **group-owner** check (edit/delete group, markets, join requests, moderation, LLM tick trigger, dispute/accept AI resolution, etc.). Leave unset in normal deployments; treat like a root password.
 
 3. Start development:
 
@@ -107,6 +115,7 @@ The LLM Arena group and its 11 bot users are auto-seeded on first access. Legacy
 | `/api/auth/[...nextauth]` | GET/POST | — | NextAuth authentication |
 | `/api/auth/forgot-password` | POST | — | Body `{ "email" }`; always `{ ok: true }` for valid email shape (no enumeration) |
 | `/api/auth/reset-password` | POST | — | Body `{ "token", "newPassword" }`; invalid/expired/reused tokens return a generic error |
+| `/api/email/unsubscribe` | GET | — | One-click unsubscribe endpoint for email categories (signed query params) |
 | `/api/llm-tick` | GET | See below | Trigger one LLM Arena tick |
 | `/api/llm-tick` | POST | `Authorization: Bearer <CRON_SECRET>` | Trigger one tick; JSON body is the tick result |
 | `/api/debug-mongo` | GET | — | MongoDB connectivity check |

@@ -45,6 +45,19 @@ const userSchema = new Schema(
       type: String,
       default: "",
     },
+    /** Opt-out toggle for umpire reminder emails after market deadline. */
+    umpireReminderEmailEnabled: {
+      type: Boolean,
+      default: true,
+    },
+    joinRequestOwnerEmailEnabled: {
+      type: Boolean,
+      default: true,
+    },
+    joinRequestDecisionEmailEnabled: {
+      type: Boolean,
+      default: true,
+    },
     isBot: {
       type: Boolean,
       default: false,

@@ -20,8 +20,9 @@ import { ModerationLogModel } from "@/models/ModerationLog";
 import { NotificationModel } from "@/models/Notification";
 import { moderateQuestion } from "@/lib/moderation";
 import { safeInternalPath } from "@/lib/safe-internal-path";
+import { isEffectiveGroupOwner } from "@/lib/super-admin";
 import {
-  notifyJoinRequestApproved,
+  notifyJoinRequestDecision,
   notifyJoinRequestSubmitted,
   notifyMarketCreated,
   notifyMarketResolvedForBettors,
@@ -187,7 +188,7 @@ export async function removeMemberAction(formData: FormData) {
   await connectToDatabase();
   const group = await GroupModel.findById(groupId).lean();
   if (!group) throw new Error("Group not found.");
-  if (group.ownerId.toString() !== user._id.toString()) {
+  if (!isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString())) {
     throw new Error("Only the group owner can remove members.");
   }
   if (memberUserId === user._id.toString()) {
@@ -242,7 +243,8 @@ export async function createMarketAction(formData: FormData) {
       verdict: "rejected",
       reason: moderation.reason,
     });
-    const isOwner = await GroupModel.exists({ _id: groupId, ownerId: user._id });
+    const groupMeta = await GroupModel.findById(groupId).select("ownerId").lean();
+    const isOwner = !!(groupMeta && isEffectiveGroupOwner(user._id.toString(), groupMeta.ownerId.toString()));
     const logId = log._id.toString();
     const reason = encodeURIComponent(moderation.reason);
     if (isOwner) {
@@ -309,7 +311,7 @@ export async function overrideModerationAction(formData: FormData) {
   }
 
   const group = await GroupModel.findById(log.groupId).lean();
-  if (!group || group.ownerId.toString() !== user._id.toString()) {
+  if (!group || !isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString())) {
     throw new Error("Only the group owner can override moderation.");
   }
 
@@ -452,7 +454,7 @@ export async function resolveMarketAction(formData: FormData) {
   if (!market) throw new Error("Market not found.");
   const group = await GroupModel.findById(market.groupId).lean();
   const isUmpire = market.umpireId.toString() === user._id.toString();
-  const isGroupOwner = group && group.ownerId.toString() === user._id.toString();
+  const isGroupOwner = !!(group && isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString()));
   if (!isUmpire && !isGroupOwner) throw new Error("Only umpire or group owner can resolve.");
   if (market.status === "resolved") return;
 
@@ -510,7 +512,8 @@ export async function updateGroupAction(formData: FormData) {
   const conn = await connectToDatabase();
   const group = await GroupModel.findById(groupId).lean();
   if (!group) throw new Error("Group not found.");
-  if (group.ownerId.toString() !== user._id.toString()) throw new Error("Only the owner can edit this group.");
+  if (!isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString()))
+    throw new Error("Only the owner can edit this group.");
 
   // Use raw collection to bypass Mongoose strict-mode stripping the visibility field
   await conn.connection.db!.collection("groups").updateOne(
@@ -534,7 +537,7 @@ export async function deleteMarketAction(formData: FormData) {
 
   const group = await GroupModel.findById(market.groupId).lean();
   if (!group) throw new Error("Group not found.");
-  if (group.ownerId.toString() !== user._id.toString()) {
+  if (!isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString())) {
     throw new Error("Only the group owner can delete a market.");
   }
 
@@ -560,7 +563,8 @@ export async function deleteGroupAction(formData: FormData) {
   await connectToDatabase();
   const group = await GroupModel.findById(groupId).lean();
   if (!group) throw new Error("Group not found.");
-  if (group.ownerId.toString() !== user._id.toString()) throw new Error("Only the owner can delete this group.");
+  if (!isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString()))
+    throw new Error("Only the owner can delete this group.");
 
   const marketIds = (await MarketModel.find({ groupId }, { _id: 1 }).lean()).map((m) => m._id);
 
@@ -593,10 +597,14 @@ export async function requestJoinGroupAction(formData: FormData) {
     redirect(`/groups/${groupId}`);
   }
 
-  const existing = await JoinRequestModel.findOne({ groupId, userId: user._id });
+  const existing = await JoinRequestModel.findOne({ groupId, userId: user._id, status: "pending" });
   if (existing) {
     redirect(`/groups/${groupId}?info=already_requested`);
   }
+
+  // Unique index on (groupId, userId) means denied/old decisions must be cleared
+  // before creating a fresh pending request.
+  await JoinRequestModel.deleteMany({ groupId, userId: user._id, status: { $ne: "pending" } });
 
   const joinRequest = await JoinRequestModel.create({ groupId, userId: user._id, status: "pending" });
   await notifyJoinRequestSubmitted({
@@ -618,7 +626,7 @@ export async function approveJoinRequestAction(formData: FormData) {
   if (!joinReq) throw new Error("Request not found.");
 
   const group = await GroupModel.findById(joinReq.groupId).lean();
-  if (!group || group.ownerId.toString() !== user._id.toString()) {
+  if (!group || !isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString())) {
     throw new Error("Only the owner can approve requests.");
   }
 
@@ -634,11 +642,12 @@ export async function approveJoinRequestAction(formData: FormData) {
       metadata: { via: "request_approved" },
     });
   }
-  await notifyJoinRequestApproved({
+  await notifyJoinRequestDecision({
     requestId: requestId,
     groupId: joinReq.groupId.toString(),
     actorUserId: user._id.toString(),
     recipientUserId: joinReq.userId.toString(),
+    approved: true,
   });
 
   revalidatePath(`/groups/${joinReq.groupId.toString()}`);
@@ -654,11 +663,18 @@ export async function denyJoinRequestAction(formData: FormData) {
   if (!joinReq) throw new Error("Request not found.");
 
   const group = await GroupModel.findById(joinReq.groupId).lean();
-  if (!group || group.ownerId.toString() !== user._id.toString()) {
+  if (!group || !isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString())) {
     throw new Error("Only the owner can deny requests.");
   }
 
   await JoinRequestModel.updateOne({ _id: requestId }, { $set: { status: "denied" } });
+  await notifyJoinRequestDecision({
+    requestId,
+    groupId: joinReq.groupId.toString(),
+    actorUserId: user._id.toString(),
+    recipientUserId: joinReq.userId.toString(),
+    approved: false,
+  });
 
   revalidatePath(`/groups/${joinReq.groupId.toString()}`);
 }
@@ -673,7 +689,7 @@ export async function dismissModerationLogAction(formData: FormData) {
   if (!log) throw new Error("Moderation log not found.");
 
   const group = await GroupModel.findById(log.groupId).lean();
-  if (!group || group.ownerId.toString() !== user._id.toString()) {
+  if (!group || !isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString())) {
     throw new Error("Only the group owner can dismiss moderation logs.");
   }
 
@@ -692,7 +708,7 @@ export async function dismissAllModerationLogsAction(formData: FormData) {
   const conn = await connectToDatabase();
   const group = await GroupModel.findById(groupId).lean();
   if (!group) throw new Error("Group not found.");
-  if (group.ownerId.toString() !== user._id.toString()) {
+  if (!isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString())) {
     throw new Error("Only the group owner can dismiss moderation logs.");
   }
 
@@ -711,7 +727,7 @@ export async function triggerLlmTickAction(formData: FormData) {
   await connectToDatabase();
   const group = await GroupModel.findById(groupId).lean();
   if (!group) throw new Error("Group not found.");
-  if (group.ownerId.toString() !== user._id.toString()) {
+  if (!isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString())) {
     throw new Error("Only the group owner can trigger LLM ticks.");
   }
 
@@ -729,11 +745,23 @@ export async function updateProfileAction(formData: FormData) {
   const lastName = formData.get("lastName")?.toString().trim() || "";
   const displayName = `${firstName} ${lastName}`.trim();
   const avatarUrl = formData.get("avatarUrl")?.toString().trim() || "";
+  const umpireReminderEmailEnabled = formData.get("umpireReminderEmailEnabled")?.toString() === "on";
+  const joinRequestOwnerEmailEnabled = formData.get("joinRequestOwnerEmailEnabled")?.toString() === "on";
+  const joinRequestDecisionEmailEnabled = formData.get("joinRequestDecisionEmailEnabled")?.toString() === "on";
   if (!firstName || !lastName) throw new Error("First and last name are required.");
   await connectToDatabase();
   await UserModel.updateOne(
     { _id: user._id },
-    { name: displayName, firstName, lastName, displayName, avatarUrl }
+    {
+      name: displayName,
+      firstName,
+      lastName,
+      displayName,
+      avatarUrl,
+      umpireReminderEmailEnabled,
+      joinRequestOwnerEmailEnabled,
+      joinRequestDecisionEmailEnabled,
+    }
   );
   revalidatePath("/profile");
   revalidatePath(`/users/${user._id.toString()}`);
@@ -751,7 +779,7 @@ export async function disputeResolutionAction(formData: FormData) {
   if (market.status !== "resolved") throw new Error("Market is not resolved.");
 
   const group = await GroupModel.findById(market.groupId).lean();
-  if (!group || group.ownerId.toString() !== user._id.toString()) {
+  if (!group || !isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString())) {
     throw new Error("Only the group owner can dispute resolutions.");
   }
 
@@ -779,7 +807,7 @@ export async function acceptResolutionAction(formData: FormData) {
   if (market.status !== "resolved") throw new Error("Market is not resolved.");
 
   const group = await GroupModel.findById(market.groupId).lean();
-  if (!group || group.ownerId.toString() !== user._id.toString()) {
+  if (!group || !isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString())) {
     throw new Error("Only the group owner can accept resolutions.");
   }
 
