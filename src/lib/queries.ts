@@ -340,10 +340,36 @@ export async function getGroupPageData(groupId: string, userId: string) {
   await connectToDatabase();
   await ensureSeedData();
 
-  const isMember = Boolean(await GroupMemberModel.exists({ groupId, userId }));
-
   const group = await GroupModel.findById(groupId).lean();
   if (!group) return null;
+
+  const isMember = Boolean(await GroupMemberModel.exists({ groupId, userId }));
+  const canViewContent = (group.visibility || "public") === "public" || isMember;
+
+  if (!canViewContent) {
+    const memberCount = await GroupMemberModel.countDocuments({ groupId });
+    const myPendingRequest = Boolean(await JoinRequestModel.exists({ groupId, userId, status: "pending" }));
+
+    return {
+      group: {
+        id: group._id.toString(),
+        name: group.name,
+        visibility: (group.visibility || "public") as "public" | "private",
+        ownerId: group.ownerId?.toString?.() || userId,
+        isMember,
+        canViewContent,
+        memberCount,
+      },
+      pendingRequests: [],
+      myPendingRequest,
+      members: [],
+      activeMarkets: [],
+      resolvedMarkets: [],
+      moderationLogs: [],
+      activity: [],
+      leaderboard: [],
+    };
+  }
 
   const members = await GroupMemberModel.find({ groupId }).lean();
   const ownerMembership = members.find((member) => member.role === "owner");
@@ -472,6 +498,7 @@ export async function getGroupPageData(groupId: string, userId: string) {
       visibility: (group.visibility || "public") as "public" | "private",
       ownerId: group.ownerId?.toString?.() || fallbackOwnerId,
       isMember,
+      canViewContent,
     },
     pendingRequests,
     myPendingRequest,

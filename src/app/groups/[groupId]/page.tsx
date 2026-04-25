@@ -37,7 +37,7 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
   if (!data) notFound();
   const memberNameById = new Map(data.members.map((member) => [member.userId, member.name]));
   const isOwner = isEffectiveGroupOwner(user._id.toString(), data.group.ownerId);
-  const canView = data.group.isMember || data.group.visibility === "public";
+  const canView = data.group.canViewContent ?? (data.group.isMember || data.group.visibility === "public");
 
   const infoMessage =
     query.info === "request_sent" ? "Your request to join has been sent." :
