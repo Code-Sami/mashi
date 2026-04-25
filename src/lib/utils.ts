@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 
 export function generateInviteCode() {
-  return crypto.randomBytes(4).toString("hex").toUpperCase();
+  // URL-safe, hard-to-guess invite code (~72 bits entropy).
+  return crypto.randomBytes(9).toString("base64url");
 }
 
 export function getInitials(value: string) {

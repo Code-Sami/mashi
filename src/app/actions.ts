@@ -8,9 +8,12 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { getPrices } from "@/lib/market";
 import { ensureSeedData } from "@/lib/seed";
 import { requireAuthUser } from "@/lib/session";
+import { getJoinModeFromVisibility, getOrCreateActiveGroupInvite } from "@/lib/invites";
+import { generateInviteCode } from "@/lib/utils";
 import { ActivityModel } from "@/models/Activity";
 import { BetModel } from "@/models/Bet";
 import { GroupModel } from "@/models/Group";
+import { GroupInviteModel } from "@/models/GroupInvite";
 import { GroupMemberModel } from "@/models/GroupMember";
 import { MarketModel } from "@/models/Market";
 import { MarketPriceHistoryModel } from "@/models/MarketPriceHistory";
@@ -128,12 +131,12 @@ export async function createGroupAction(formData: FormData) {
   if (!name) throw new Error("Group name is required.");
   const visibility = formData.get("visibility")?.toString() === "private" ? "private" : "public";
 
-  const publicCode = `PUBLIC-${Date.now().toString(36).toUpperCase()}`;
+  const inviteCode = generateInviteCode();
   const group = await GroupModel.create({
     name,
     description: "",
     ownerId: user._id,
-    inviteCode: publicCode,
+    inviteCode,
   });
   await conn.connection.db!.collection("groups").updateOne(
     { _id: group._id },
@@ -141,6 +144,7 @@ export async function createGroupAction(formData: FormData) {
   );
 
   await GroupMemberModel.create({ groupId: group._id, userId: user._id, role: "owner" });
+  await getOrCreateActiveGroupInvite(group._id.toString(), user._id.toString(), getJoinModeFromVisibility(visibility));
   await ActivityModel.create({
     groupId: group._id,
     actorUserId: user._id,
@@ -171,7 +175,7 @@ export async function joinGroupAction(formData: FormData) {
       groupId,
       actorUserId: user._id,
       type: "member_joined",
-      metadata: { via: "public_group" },
+      metadata: { via: "invite_link" },
     });
   }
 
@@ -520,6 +524,10 @@ export async function updateGroupAction(formData: FormData) {
     { _id: new Types.ObjectId(groupId) },
     { $set: { name, visibility } }
   );
+  await GroupInviteModel.updateMany(
+    { groupId, isActive: true },
+    { $set: { joinMode: getJoinModeFromVisibility(visibility as "public" | "private") } },
+  );
 
   revalidatePath(`/groups/${groupId}`);
   revalidatePath("/groups");
@@ -590,7 +598,7 @@ export async function requestJoinGroupAction(formData: FormData) {
   await connectToDatabase();
   const group = await GroupModel.findById(groupId).lean() as Record<string, unknown> | null;
   if (!group) throw new Error("Group not found.");
-  if (group.visibility !== "private") throw new Error("This group is public — join directly.");
+  if (group.visibility !== "private") throw new Error("This group allows invite-link auto join.");
 
   const isMember = await GroupMemberModel.exists({ groupId, userId: user._id });
   if (isMember) {
@@ -614,6 +622,94 @@ export async function requestJoinGroupAction(formData: FormData) {
   });
   revalidatePath(`/groups/${groupId}`);
   redirect(`/groups/${groupId}?info=request_sent`);
+}
+
+function isInviteValid(invite: {
+  isActive?: boolean;
+  expiresAt?: Date | null;
+  maxUses?: number | null;
+  useCount?: number;
+}) {
+  if (!invite || invite.isActive !== true) return false;
+  if (invite.expiresAt && invite.expiresAt.getTime() <= Date.now()) return false;
+  if (typeof invite.maxUses === "number" && (invite.useCount || 0) >= invite.maxUses) return false;
+  return true;
+}
+
+export async function acceptGroupInviteAction(formData: FormData) {
+  const user = await requireAuthUser();
+  const code = formData.get("code")?.toString().trim() || "";
+  if (!code) redirect("/groups");
+
+  await connectToDatabase();
+  const invite = await GroupInviteModel.findOne({ code }).lean();
+  if (!invite || !isInviteValid(invite)) redirect("/groups?error=invalid_invite");
+
+  const groupId = invite.groupId.toString();
+  const group = await GroupModel.findById(groupId).lean();
+  if (!group) redirect("/groups?error=invalid_invite");
+
+  const existingMember = await GroupMemberModel.exists({ groupId, userId: user._id });
+  if (existingMember) {
+    redirect(`/groups/${groupId}`);
+  }
+
+  const joinMode = (invite.joinMode || getJoinModeFromVisibility((group.visibility || "public") as "public" | "private"));
+  if (joinMode === "auto") {
+    await GroupMemberModel.create({ groupId, userId: user._id, role: "member" });
+    await GroupInviteModel.updateOne({ _id: invite._id }, { $inc: { useCount: 1 } });
+    await ActivityModel.create({
+      groupId,
+      actorUserId: user._id,
+      type: "member_joined",
+      metadata: { via: "invite_link" },
+    });
+    revalidatePath("/groups");
+    revalidatePath(`/groups/${groupId}`);
+    redirect(`/groups/${groupId}?joined=1`);
+  }
+
+  const existingPending = await JoinRequestModel.findOne({ groupId, userId: user._id, status: "pending" });
+  if (existingPending) {
+    redirect(`/groups/${groupId}?info=already_requested`);
+  }
+
+  // For request-mode invites we count actual joins, not request attempts.
+  await JoinRequestModel.deleteMany({ groupId, userId: user._id, status: { $ne: "pending" } });
+  const joinRequest = await JoinRequestModel.create({ groupId, userId: user._id, status: "pending" });
+  await notifyJoinRequestSubmitted({
+    requestId: joinRequest._id.toString(),
+    groupId,
+    actorUserId: user._id.toString(),
+  });
+  revalidatePath(`/groups/${groupId}`);
+  redirect(`/groups/${groupId}?info=request_sent`);
+}
+
+export async function regenerateGroupInviteAction(formData: FormData) {
+  const user = await requireAuthUser();
+  const groupId = formData.get("groupId")?.toString() || "";
+  if (!groupId) throw new Error("Group id is required.");
+
+  await connectToDatabase();
+  const group = await GroupModel.findById(groupId).lean();
+  if (!group) throw new Error("Group not found.");
+  if (!isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString())) {
+    throw new Error("Only the owner can regenerate invite links.");
+  }
+
+  await GroupInviteModel.updateMany(
+    { groupId, isActive: true },
+    { $set: { isActive: false } },
+  );
+
+  await getOrCreateActiveGroupInvite(
+    groupId,
+    user._id.toString(),
+    getJoinModeFromVisibility((group.visibility || "public") as "public" | "private"),
+  );
+
+  revalidatePath(`/groups/${groupId}`);
 }
 
 export async function approveJoinRequestAction(formData: FormData) {

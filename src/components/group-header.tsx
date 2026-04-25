@@ -2,14 +2,12 @@
 
 import Link from "next/link";
 import { useOptimistic, useTransition } from "react";
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { DeadlineInput } from "@/components/deadline-input";
 import { LocalDate } from "@/components/local-date";
 import {
-  joinGroupAction,
   leaveGroupAction,
   removeMemberAction,
-  requestJoinGroupAction,
   updateGroupAction,
   approveJoinRequestAction,
   denyJoinRequestAction,
@@ -17,8 +15,10 @@ import {
   overrideModerationAction,
   dismissModerationLogAction,
   dismissAllModerationLogsAction,
+  regenerateGroupInviteAction,
 } from "@/app/actions";
 import { CreateMarketButton } from "@/components/create-market-modal";
+import { GroupInviteButton } from "@/components/group-invite-button";
 
 type Member = {
   userId: string;
@@ -65,6 +65,8 @@ type Props = {
     createdAt: string | null;
   }[];
   isLlmArena?: boolean;
+  inviteUrl: string;
+  inviteJoinMode: "auto" | "request";
 };
 
 function ModerationLogEntry({ log, members, onDismiss }: {
@@ -145,7 +147,7 @@ function ModerationLogEntry({ log, members, onDismiss }: {
   );
 }
 
-export function GroupHeader({ group, isOwner, myPendingRequest, members, pendingRequests, infoMessage, createMarketMembers, moderation, moderationLogs, isLlmArena }: Props) {
+export function GroupHeader({ group, isOwner, myPendingRequest, members, pendingRequests, infoMessage, createMarketMembers, moderation, moderationLogs, isLlmArena, inviteUrl, inviteJoinMode }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [tickRunning, setTickRunning] = useState(false);
@@ -174,11 +176,11 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
             ) : null}
             <h1 className="text-2xl font-bold">{group.name}</h1>
             {isPrivate ? (
-              <span className="rounded-lg bg-foreground-tertiary/20 px-2 py-0.5 text-xs font-semibold text-foreground-secondary">Private</span>
+              <span className="rounded-lg bg-foreground-tertiary/20 px-2 py-0.5 text-xs font-semibold text-foreground-secondary">Approval required</span>
             ) : isLlmArena ? (
               <span className="rounded-lg bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-600">AI-Powered</span>
             ) : (
-              <span className="rounded-lg bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand-dark">Public</span>
+              <span className="rounded-lg bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand-dark">Invite link join</span>
             )}
           </div>
           <button
@@ -194,23 +196,12 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
           {group.isMember && createMarketMembers ? (
             <CreateMarketButton groupId={group.id} members={createMarketMembers} moderation={moderation} />
           ) : null}
-          {!group.isMember ? (
-            isPrivate ? (
-              myPendingRequest ? (
-                <span className="rounded-xl bg-foreground-tertiary/20 px-4 py-2 text-sm font-medium text-foreground-secondary">Request pending</span>
-              ) : (
-                <form action={requestJoinGroupAction}>
-                  <input type="hidden" name="groupId" value={group.id} />
-                  <button className="rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">Request to join</button>
-                </form>
-              )
-            ) : (
-              <form action={joinGroupAction}>
-                <input type="hidden" name="groupId" value={group.id} />
-                <button className="rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">Join group</button>
-              </form>
-            )
-          ) : !isOwner ? (
+          {group.isMember ? (
+            <GroupInviteButton inviteUrl={inviteUrl} groupName={group.name} joinMode={inviteJoinMode} />
+          ) : myPendingRequest ? (
+            <span className="rounded-xl bg-foreground-tertiary/20 px-4 py-2 text-sm font-medium text-foreground-secondary">Request pending</span>
+          ) : null}
+          {group.isMember && !isOwner ? (
             <form action={leaveGroupAction}>
               <input type="hidden" name="groupId" value={group.id} />
               <button className="rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:border-decrease hover:text-decrease">Leave group</button>
@@ -400,13 +391,19 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
                   <input name="name" defaultValue={group.name} required className="mt-1 w-full rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20" />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-foreground-secondary">Visibility</label>
+                  <label className="text-sm font-medium text-foreground-secondary">Join access</label>
                   <select name="visibility" defaultValue={group.visibility} className="mt-1 w-full rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
-                    <option value="public">Public — anyone can join</option>
-                    <option value="private">Private — request to join</option>
+                    <option value="public">Anyone with invite link can join</option>
+                    <option value="private">Require approval to join</option>
                   </select>
                 </div>
                 <button className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">Save changes</button>
+              </form>
+              <form action={regenerateGroupInviteAction} className="mt-3">
+                <input type="hidden" name="groupId" value={group.id} />
+                <button className="rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:border-brand hover:text-brand-dark">
+                  Regenerate link
+                </button>
               </form>
               <form
                 action={deleteGroupAction}

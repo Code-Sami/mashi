@@ -7,6 +7,8 @@ import { MarketGearMenu } from "@/components/market-gear-menu";
 import { MarketQuestionWithMentions } from "@/components/market-question-with-mentions";
 import { getGroupPageData } from "@/lib/queries";
 import { isEffectiveGroupOwner } from "@/lib/super-admin";
+import { appBaseUrl } from "@/lib/password-reset-email";
+import { getJoinModeFromVisibility, getOrCreateActiveGroupInvite } from "@/lib/invites";
 import { getInitials, relativeTime } from "@/lib/utils";
 import { notFound } from "next/navigation";
 import { requireAuthUser } from "@/lib/session";
@@ -17,7 +19,7 @@ export const dynamic = "force-dynamic";
 
 type PageProps = {
   params: Promise<{ groupId: string }>;
-  searchParams: Promise<{ error?: string; info?: string; moderation?: string; reason?: string; logId?: string; canOverride?: string }>;
+  searchParams: Promise<{ error?: string; info?: string; joined?: string; moderation?: string; reason?: string; logId?: string; canOverride?: string }>;
 };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -35,6 +37,14 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
   const query = await searchParams;
   const data = await getGroupPageData(groupId, user._id.toString());
   if (!data) notFound();
+  const invite = await getOrCreateActiveGroupInvite(
+    data.group.id,
+    data.group.ownerId,
+    getJoinModeFromVisibility(data.group.visibility),
+  );
+  const inviteCode = invite.code;
+  const inviteUrl = `${appBaseUrl()}/invite/${inviteCode}`;
+  const inviteJoinMode = (invite.joinMode || getJoinModeFromVisibility(data.group.visibility)) as "auto" | "request";
   const memberNameById = new Map(data.members.map((member) => [member.userId, member.name]));
   const isOwner = isEffectiveGroupOwner(user._id.toString(), data.group.ownerId);
   const canView = data.group.canViewContent;
@@ -42,7 +52,8 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
   const infoMessage =
     query.info === "request_sent" ? "Your request to join has been sent." :
     query.info === "already_requested" ? "You already have a pending request." :
-    query.error === "private_group" ? "This group is private. Request to join instead." : "";
+    query.error === "private_group" ? "This group requires approval to join." :
+    query.joined === "1" ? "Welcome to the group." : "";
 
   const moderation = query.moderation === "rejected"
     ? {
@@ -80,6 +91,8 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
         moderation={moderation}
         moderationLogs={data.moderationLogs}
         isLlmArena={data.group.name === "LLM Arena"}
+        inviteUrl={inviteUrl}
+        inviteJoinMode={inviteJoinMode}
       />
 
       {canView ? (
@@ -272,8 +285,8 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
             <rect x="3" y="11" width="18" height="11" rx="2" />
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
-          <p className="mt-4 text-lg font-semibold">This group is private</p>
-          <p className="mt-1 text-sm text-foreground-tertiary">You need to be a member to see markets, activity, and leaderboards.</p>
+          <p className="mt-4 text-lg font-semibold">You are not in this group yet</p>
+          <p className="mt-1 text-sm text-foreground-tertiary">Ask for an invite link to join this group.</p>
         </section>
       )}
     </div>

@@ -197,12 +197,13 @@ export async function getGroupsDirectoryData(userId: string) {
   await ensureSeedData();
 
   const memberships = await GroupMemberModel.find({ userId }).lean();
+  const groupIds = memberships.map((membership) => membership.groupId);
   const membershipSet = new Set(memberships.map((membership) => membership.groupId.toString()));
-  const groups = await GroupModel.find().lean();
+  const groups = await GroupModel.find({ _id: { $in: groupIds } }).sort({ createdAt: -1 }).lean();
   const allMembers = await GroupMemberModel.find({
     groupId: { $in: groups.map((group) => group._id) },
   }).lean();
-  const myPendingRequests = await JoinRequestModel.find({ userId, status: "pending" }).lean();
+  const myPendingRequests = await JoinRequestModel.find({ userId, status: "pending", groupId: { $in: groupIds } }).lean();
   const pendingSet = new Set(myPendingRequests.map((r) => r.groupId.toString()));
 
   return groups
@@ -214,7 +215,7 @@ export async function getGroupsDirectoryData(userId: string) {
       isMember: membershipSet.has(group._id.toString()),
       hasPendingRequest: pendingSet.has(group._id.toString()),
     }))
-    .sort((a, b) => b.memberCount - a.memberCount);
+    .sort((a, b) => b.memberCount - a.memberCount || a.name.localeCompare(b.name));
 }
 
 export async function getMarketDetailData(marketId: string) {
@@ -344,7 +345,7 @@ export async function getGroupPageData(groupId: string, userId: string) {
   if (!group) return null;
 
   const isMember = Boolean(await GroupMemberModel.exists({ groupId, userId }));
-  const canViewContent = (group.visibility || "public") === "public" || isMember;
+  const canViewContent = isMember;
 
   if (!canViewContent) {
     const memberCount = await GroupMemberModel.countDocuments({ groupId });

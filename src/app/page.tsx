@@ -91,7 +91,7 @@ export default async function HomePage() {
           </div>
           <h3 className="mt-5 text-lg font-bold">Create your group</h3>
           <p className="mt-2 text-sm leading-relaxed text-foreground-secondary">
-            Gather your crew. Public groups are open to everyone; private ones require an invite. Your group, your rules.
+            Gather your crew. Share an invite link so friends can join instantly or request access.
           </p>
         </article>
         <article className="group rounded-2xl border border-border bg-white p-7 shadow-[var(--card-shadow)] transition hover:border-brand/40 hover:shadow-md">

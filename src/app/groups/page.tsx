@@ -5,7 +5,7 @@ import { GroupsDirectory } from "@/components/groups-directory";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
-  title: "Mashi - Groups",
+  title: "Mashi - My Groups",
 };
 
 export default async function GroupsPage() {

@@ -1,7 +1,8 @@
 "use client";
 
-import { createGroupAction, joinGroupAction, requestJoinGroupAction } from "@/app/actions";
+import { createGroupAction } from "@/app/actions";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
 type GroupEntry = {
@@ -9,8 +10,6 @@ type GroupEntry = {
   name: string;
   visibility: "public" | "private";
   memberCount: number;
-  isMember: boolean;
-  hasPendingRequest: boolean;
 };
 
 const LockIcon = () => (
@@ -21,8 +20,10 @@ const LockIcon = () => (
 );
 
 export function GroupsDirectory({ groups }: { groups: GroupEntry[] }) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [inviteInput, setInviteInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const filtered = search.trim()
@@ -34,9 +35,19 @@ export function GroupsDirectory({ groups }: { groups: GroupEntry[] }) {
       <section className="rounded-2xl border border-border bg-white p-6 shadow-[var(--card-shadow)]">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Groups</h1>
-            <p className="mt-1 text-sm text-foreground-secondary">Browse and join public groups, or create your own.</p>
+            <h1 className="text-2xl font-bold">My Groups</h1>
+            <p className="mt-1 text-sm text-foreground-secondary">Create a group, share the invite link, and start making markets with friends.</p>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              setShowCreate(true);
+              requestAnimationFrame(() => inputRef.current?.focus());
+            }}
+            className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover"
+          >
+            Create group
+          </button>
         </div>
 
         <div className="mt-4 flex gap-2">
@@ -49,7 +60,7 @@ export function GroupsDirectory({ groups }: { groups: GroupEntry[] }) {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search groups..."
+              placeholder="Search your groups..."
               className="w-full rounded-xl border border-border bg-background-secondary py-2.5 pl-10 pr-3 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
             />
           </div>
@@ -61,8 +72,8 @@ export function GroupsDirectory({ groups }: { groups: GroupEntry[] }) {
                 requestAnimationFrame(() => inputRef.current?.focus());
               }
             }}
-            className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl bg-brand text-brand-dark transition hover:bg-brand-hover"
-            title="Create new group"
+            className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border border-border text-foreground-secondary transition hover:border-brand hover:text-brand-dark"
+            title="Create group"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path d="M12 5v14M5 12h14" strokeLinecap="round" />
@@ -84,8 +95,8 @@ export function GroupsDirectory({ groups }: { groups: GroupEntry[] }) {
               defaultValue="public"
               className="rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
             >
-              <option value="public">Public</option>
-              <option value="private">Private</option>
+              <option value="public">Anyone with invite link can join</option>
+              <option value="private">Require approval to join</option>
             </select>
             <button className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">
               Create
@@ -93,10 +104,32 @@ export function GroupsDirectory({ groups }: { groups: GroupEntry[] }) {
           </form>
         ) : null}
 
+        <form
+          className="mt-3 flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const raw = inviteInput.trim();
+            if (!raw) return;
+            const code = raw.includes("/invite/") ? raw.split("/invite/").pop()?.split(/[?#]/)[0] || "" : raw.replace(/[^a-zA-Z0-9_-]/g, "");
+            if (!code) return;
+            router.push(`/invite/${code}`);
+          }}
+        >
+          <input
+            value={inviteInput}
+            onChange={(e) => setInviteInput(e.target.value)}
+            placeholder="Paste invite link or code"
+            className="flex-1 rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+          />
+          <button className="rounded-xl border border-border px-4 py-2.5 text-sm font-medium transition hover:border-brand hover:text-brand-dark">
+            Join with invite
+          </button>
+        </form>
+
         <div className="mt-4 grid gap-2">
           {filtered.length === 0 ? (
             <p className="py-4 text-center text-sm text-foreground-tertiary">
-              {search.trim() ? "No groups match your search." : "No groups yet."}
+              {search.trim() ? "No groups match your search." : "You are not in any groups yet."}
             </p>
           ) : (
             filtered.map((group) => (
@@ -119,23 +152,9 @@ export function GroupsDirectory({ groups }: { groups: GroupEntry[] }) {
                 </div>
                 <div className="flex gap-2">
                   <Link href={`/groups/${group.id}`} className="rounded-xl border border-border px-3 py-2 text-sm font-medium transition hover:border-brand">
-                    View
+                    Open
                   </Link>
-                  {group.isMember ? (
-                    <span className="rounded-xl bg-brand/10 px-3 py-2 text-sm font-medium text-brand-dark">Joined</span>
-                  ) : group.hasPendingRequest ? (
-                    <span className="rounded-xl bg-foreground-tertiary/20 px-3 py-2 text-sm font-medium text-foreground-secondary">Pending</span>
-                  ) : group.visibility === "private" ? (
-                    <form action={requestJoinGroupAction}>
-                      <input type="hidden" name="groupId" value={group.id} />
-                      <button className="rounded-xl border border-brand bg-brand/10 px-3 py-2 text-sm font-semibold text-brand-dark transition hover:bg-brand/20">Request</button>
-                    </form>
-                  ) : (
-                    <form action={joinGroupAction}>
-                      <input type="hidden" name="groupId" value={group.id} />
-                      <button className="rounded-xl bg-brand px-3 py-2 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">Join</button>
-                    </form>
-                  )}
+                  <span className="rounded-xl bg-brand/10 px-3 py-2 text-sm font-medium text-brand-dark">Member</span>
                 </div>
               </div>
             ))
