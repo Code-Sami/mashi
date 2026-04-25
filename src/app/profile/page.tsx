@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { updateProfileAction } from "@/app/actions";
+import { UserAvatar } from "@/components/user-avatar";
 import { requireAuthUser } from "@/lib/session";
-import { getInitials } from "@/lib/utils";
+import { ProfileSubmitButton } from "@/app/profile/submit-button";
 
 export const metadata: Metadata = {
   title: "Mashi - Settings",
@@ -23,9 +24,12 @@ export default async function ProfilePage() {
       <p className="mt-1 text-sm text-foreground-secondary">Manage your account details.</p>
 
       <div className="mt-5 flex items-center gap-3 rounded-xl border border-border-light bg-background-secondary p-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand/10 text-sm font-bold text-brand-dark">
-          {getInitials(fullName)}
-        </div>
+        <UserAvatar
+          name={fullName}
+          avatarUrl={user.avatarUrl}
+          sizeClassName="h-12 w-12"
+          textClassName="text-sm"
+        />
         <div>
           <p className="font-semibold">{fullName}</p>
           <p className="text-xs text-foreground-tertiary">{user.email}</p>
@@ -93,7 +97,7 @@ export default async function ProfilePage() {
             </span>
           </label>
         </div>
-        <button className="mt-1 rounded-xl bg-brand px-4 py-2.5 font-semibold text-brand-dark transition hover:bg-brand-hover">Save profile</button>
+        <ProfileSubmitButton />
       </form>
     </div>
   );

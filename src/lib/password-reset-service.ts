@@ -82,7 +82,7 @@ export async function resetPasswordWithToken(
       ok: false,
       error: "invalid_or_expired",
       message:
-        "This link is invalid, expired, or was already used. Request a new reset from forgot password.",
+        "This link is invalid, expired, or was already used. Request a new reset from the Forgot Password page.",
     };
   }
 

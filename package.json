@@ -4,6 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:web": "next dev",
+    "dev:mobile": "npm --prefix apps/mobile run start",
+    "ios": "npm --prefix apps/mobile run ios",
+    "android": "npm --prefix apps/mobile run android",
+    "mobile:web": "npm --prefix apps/mobile run web",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

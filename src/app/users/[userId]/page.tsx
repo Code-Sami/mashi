@@ -1,6 +1,6 @@
 import { LocalDate } from "@/components/local-date";
+import { UserAvatar } from "@/components/user-avatar";
 import { getPublicUserProfileData } from "@/lib/queries";
-import { getInitials } from "@/lib/utils";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
@@ -60,9 +60,12 @@ export default async function PublicUserProfilePage({ params }: UserProfilePageP
       <section className="rounded-2xl border border-border bg-white p-6 shadow-[var(--card-shadow)]">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-lg font-bold text-brand-dark">
-            {getInitials(data.user.name)}
-          </div>
+          <UserAvatar
+            name={data.user.name}
+            avatarUrl={data.user.avatarUrl}
+            sizeClassName="h-14 w-14"
+            textClassName="text-lg"
+          />
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold">{data.user.name}</h1>
