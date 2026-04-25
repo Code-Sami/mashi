@@ -332,7 +332,7 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
                 href={`/login?callbackUrl=${encodeURIComponent(`/markets/${data.market.id}`)}`}
                 className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover"
               >
-                Log in
+                Log in to join and bet
               </Link>
               <Link
                 href={`/signup?callbackUrl=${encodeURIComponent(`/markets/${data.market.id}`)}`}

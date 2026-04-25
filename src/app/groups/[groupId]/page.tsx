@@ -11,7 +11,7 @@ import { appBaseUrl } from "@/lib/password-reset-email";
 import { getJoinModeFromVisibility, getOrCreateActiveGroupInvite } from "@/lib/invites";
 import { getInitials, relativeTime } from "@/lib/utils";
 import { notFound } from "next/navigation";
-import { requireAuthUser } from "@/lib/session";
+import { getAuthUserOrNull } from "@/lib/session";
 import { connectToDatabase } from "@/lib/mongodb";
 import { GroupModel } from "@/models/Group";
 
@@ -32,21 +32,25 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function GroupDetailPage({ params, searchParams }: PageProps) {
-  const user = await requireAuthUser();
+  const user = await getAuthUserOrNull();
   const { groupId } = await params;
   const query = await searchParams;
-  const data = await getGroupPageData(groupId, user._id.toString());
+  const data = await getGroupPageData(groupId, user?._id.toString() || null);
   if (!data) notFound();
-  const invite = await getOrCreateActiveGroupInvite(
-    data.group.id,
-    data.group.ownerId,
-    getJoinModeFromVisibility(data.group.visibility),
-  );
-  const inviteCode = invite.code;
-  const inviteUrl = `${appBaseUrl()}/invite/${inviteCode}`;
-  const inviteJoinMode = (invite.joinMode || getJoinModeFromVisibility(data.group.visibility)) as "auto" | "request";
+  const defaultJoinMode = getJoinModeFromVisibility(data.group.visibility);
+  const invite = user
+    ? await getOrCreateActiveGroupInvite(
+        data.group.id,
+        data.group.ownerId,
+        defaultJoinMode,
+      )
+    : null;
+  const inviteCode = invite?.code || "";
+  const inviteUrl = invite ? `${appBaseUrl()}/invite/${invite.code}` : "";
+  const inviteJoinMode = (invite?.joinMode || defaultJoinMode) as "auto" | "request";
   const memberNameById = new Map(data.members.map((member) => [member.userId, member.name]));
-  const isOwner = isEffectiveGroupOwner(user._id.toString(), data.group.ownerId);
+  const visibleMemberCount = (data.group as { memberCount?: number }).memberCount ?? data.members.length;
+  const isOwner = Boolean(user && isEffectiveGroupOwner(user._id.toString(), data.group.ownerId));
   const canView = data.group.canViewContent;
 
   const infoMessage =
@@ -68,32 +72,79 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
 
   return (
     <div className="grid gap-6">
-      <GroupHeader
-        group={data.group}
-        isOwner={isOwner}
-        myPendingRequest={data.myPendingRequest}
-        members={data.members.map((m) => ({
-          userId: m.userId,
-          name: m.name,
-          role: m.role,
-          initials: getInitials(m.name),
-          isBot: m.isBot,
-        }))}
-        pendingRequests={data.pendingRequests.map((req) => ({
-          ...req,
-          initials: getInitials(req.name),
-        }))}
-        infoMessage={infoMessage}
-        createMarketMembers={data.members.map((m) => ({
-          userId: m.userId,
-          name: m.name,
-        }))}
-        moderation={moderation}
-        moderationLogs={data.moderationLogs}
-        isLlmArena={data.group.name === "LLM Arena"}
-        inviteUrl={inviteUrl}
-        inviteJoinMode={inviteJoinMode}
-      />
+      {user ? (
+        <GroupHeader
+          group={data.group}
+          isOwner={isOwner}
+          myPendingRequest={data.myPendingRequest}
+          members={data.members.map((m) => ({
+            userId: m.userId,
+            name: m.name,
+            role: m.role,
+            initials: getInitials(m.name),
+            isBot: m.isBot,
+          }))}
+          pendingRequests={data.pendingRequests.map((req) => ({
+            ...req,
+            initials: getInitials(req.name),
+          }))}
+          infoMessage={infoMessage}
+          createMarketMembers={data.members.map((m) => ({
+            userId: m.userId,
+            name: m.name,
+          }))}
+          moderation={moderation}
+          moderationLogs={data.moderationLogs}
+          isLlmArena={data.group.name === "LLM Arena"}
+          inviteUrl={inviteUrl}
+          inviteJoinMode={inviteJoinMode}
+        />
+      ) : (
+        <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--card-shadow)]">
+          <h1 className="text-2xl font-bold">{data.group.name}</h1>
+          <p className="mt-1 text-sm text-foreground-secondary">
+            {visibleMemberCount} {visibleMemberCount === 1 ? "member" : "members"}
+          </p>
+          <p className="mt-3 text-sm text-foreground-secondary">
+            {data.group.visibility === "public"
+              ? "This is a public group. Log in to join this group."
+              : "This group is private. Log in and request access."}
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {data.group.visibility === "public" ? (
+              <>
+                <Link
+                  href={`/login?callbackUrl=${encodeURIComponent(`/groups/${data.group.id}`)}`}
+                  className="rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover"
+                >
+                  Log in to join this group
+                </Link>
+                <Link
+                  href={`/signup?callbackUrl=${encodeURIComponent(`/groups/${data.group.id}`)}`}
+                  className="rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-background-secondary"
+                >
+                  Sign up
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  href={`/login?callbackUrl=${encodeURIComponent(`/groups/${data.group.id}`)}`}
+                  className="rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover"
+                >
+                  Log in
+                </Link>
+                <Link
+                  href={`/signup?callbackUrl=${encodeURIComponent(`/groups/${data.group.id}`)}`}
+                  className="rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:bg-background-secondary"
+                >
+                  Sign up
+                </Link>
+              </>
+            )}
+          </div>
+        </section>
+      )}
 
       {canView ? (
         <>
@@ -287,9 +338,7 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
           </svg>
           <p className="mt-4 text-lg font-semibold">You are not in this group yet</p>
           <p className="mt-1 text-sm text-foreground-tertiary">
-            {data.group.visibility === "private"
-              ? "Use the request button above to ask for access, or join via invite link."
-              : "Join via invite link to access this group."}
+            {user ? "Use the request button above to ask for access." : "Log in to request access."}
           </p>
         </section>
       )}
