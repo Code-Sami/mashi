@@ -79,7 +79,7 @@ export function GroupsDirectory({ groups }: { groups: GroupsPayload }) {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">My Groups</h1>
-            <p className="mt-1 text-sm text-foreground-secondary">Create a group, share the invite link, and start making markets with friends.</p>
+            <p className="mt-1 hidden text-sm text-foreground-secondary sm:block">Create a group, share the invite link, and start making markets with friends.</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -122,26 +122,46 @@ export function GroupsDirectory({ groups }: { groups: GroupsPayload }) {
         </div>
 
         {showCreate ? (
-          <form action={createGroupAction} className="mt-3 flex gap-2">
-            <input
-              ref={inputRef}
-              name="name"
-              required
-              placeholder="New group name"
-              className="flex-1 rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-            />
-            <select
-              name="visibility"
-              defaultValue="private"
-              className="rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+          <div
+            className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+            onClick={() => setShowCreate(false)}
+          >
+            <div
+              className="w-full max-w-md rounded-2xl border border-border bg-white p-4 shadow-xl sm:p-5"
+              onClick={(e) => e.stopPropagation()}
             >
-              <option value="public">Public: Anyone can find and join this group</option>
-              <option value="private">Private: Only people with an invite link can request to join</option>
-            </select>
-            <button className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">
-              Create
-            </button>
-          </form>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Create group</h2>
+                <button
+                  type="button"
+                  onClick={() => setShowCreate(false)}
+                  className="rounded-md px-2 py-1 text-sm text-foreground-tertiary transition hover:bg-background-secondary hover:text-foreground-secondary"
+                >
+                  Close
+                </button>
+              </div>
+              <form action={createGroupAction} className="grid gap-2">
+                <input
+                  ref={inputRef}
+                  name="name"
+                  required
+                  placeholder="New group name"
+                  className="w-full rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                />
+                <select
+                  name="visibility"
+                  defaultValue="private"
+                  className="w-full rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                >
+                  <option value="public">Public: Anyone can find and join this group</option>
+                  <option value="private">Private: Unlisted, owner approval required</option>
+                </select>
+                <button className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">
+                  Create
+                </button>
+              </form>
+            </div>
+          </div>
         ) : null}
 
         {showJoinInvite ? (

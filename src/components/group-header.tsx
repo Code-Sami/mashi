@@ -435,7 +435,7 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
                   <label className="text-sm font-medium text-foreground-secondary">Join access</label>
                   <select name="visibility" defaultValue={group.visibility} className="mt-1 w-full rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
                     <option value="public">Public: Anyone can find and join this group</option>
-                    <option value="private">Private: Only people with an invite link can request to join</option>
+                    <option value="private">Private: Unlisted, owner approval required</option>
                   </select>
                 </div>
                 <button className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">Save changes</button>

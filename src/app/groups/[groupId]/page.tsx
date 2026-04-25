@@ -105,10 +105,10 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
           <p className="mt-1 text-sm text-foreground-secondary">
             {visibleMemberCount} {visibleMemberCount === 1 ? "member" : "members"}
           </p>
-          <p className="mt-3 text-sm text-foreground-secondary">
+          <p className="mt-3 max-w-prose text-sm text-foreground-secondary">
             {data.group.visibility === "public"
               ? "This is a public group. Log in to join this group."
-              : "This group is private. Log in and request access."}
+              : "Private group. Unlisted, owner approval required. Log in to request access."}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {data.group.visibility === "public" ? (
