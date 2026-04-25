@@ -58,6 +58,8 @@ function fallbackUsername(user: {
   return `user${user._id.toString().slice(-6)}`;
 }
 
+const MEMBER_JOIN_ACTIVITY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
 export async function getDashboardData(userId: string) {
   await connectToDatabase();
   await ensureSeedData();
@@ -402,7 +404,21 @@ export async function getGroupPageData(groupId: string, userId?: string | null) 
 
   const markets = await MarketModel.find({ groupId }).sort({ createdAt: -1 }).lean();
   const marketTitleById = new Map(markets.map((market) => [market._id.toString(), market.question]));
-  const activities = await ActivityModel.find({ groupId }).sort({ createdAt: -1 }).limit(20).lean();
+  const activityRows = await ActivityModel.find({ groupId }).sort({ createdAt: -1 }).limit(100).lean();
+  const memberJoinedSeen = new Map<string, number>();
+  const activities = activityRows
+    .filter((item) => {
+      if (item.type !== "member_joined") return true;
+      const actorId = item.actorUserId.toString();
+      const createdAtMs = item.createdAt ? new Date(item.createdAt).getTime() : 0;
+      const lastSeenMs = memberJoinedSeen.get(actorId);
+      if (typeof lastSeenMs === "number" && lastSeenMs - createdAtMs < MEMBER_JOIN_ACTIVITY_COOLDOWN_MS) {
+        return false;
+      }
+      memberJoinedSeen.set(actorId, createdAtMs);
+      return true;
+    })
+    .slice(0, 20);
   const activityActorIds = [...new Set(activities.map((item) => item.actorUserId.toString()))];
   const activityActors = await UserModel.find({ _id: { $in: activityActorIds } }).lean();
   const activityActorMap = new Map(activityActors.map((user) => [user._id.toString(), user]));
