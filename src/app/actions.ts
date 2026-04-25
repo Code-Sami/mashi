@@ -58,6 +58,30 @@ function parseUserIdList(formData: FormData, field: string) {
   return [...new Set(formData.getAll(field).map((value) => value.toString()).filter(Boolean))];
 }
 
+const MEMBER_JOIN_ACTIVITY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+async function logMemberJoinedActivity(params: {
+  groupId: string | Types.ObjectId;
+  actorUserId: string | Types.ObjectId;
+  via: string;
+}) {
+  const recentThreshold = new Date(Date.now() - MEMBER_JOIN_ACTIVITY_COOLDOWN_MS);
+  const hasRecentJoinLog = await ActivityModel.exists({
+    groupId: params.groupId,
+    actorUserId: params.actorUserId,
+    type: "member_joined",
+    createdAt: { $gte: recentThreshold },
+  });
+  if (hasRecentJoinLog) return;
+
+  await ActivityModel.create({
+    groupId: params.groupId,
+    actorUserId: params.actorUserId,
+    type: "member_joined",
+    metadata: { via: params.via },
+  });
+}
+
 export async function signupAction(formData: FormData) {
   const firstName = formData.get("firstName")?.toString().trim() || "";
   const lastName = formData.get("lastName")?.toString().trim() || "";
@@ -145,11 +169,10 @@ export async function createGroupAction(formData: FormData) {
 
   await GroupMemberModel.create({ groupId: group._id, userId: user._id, role: "owner" });
   await getOrCreateActiveGroupInvite(group._id.toString(), user._id.toString(), getJoinModeFromVisibility(visibility));
-  await ActivityModel.create({
+  await logMemberJoinedActivity({
     groupId: group._id,
     actorUserId: user._id,
-    type: "member_joined",
-    metadata: { via: "group_created" },
+    via: "group_created",
   });
 
   revalidatePath("/groups");
@@ -171,11 +194,10 @@ export async function joinGroupAction(formData: FormData) {
   const existing = await GroupMemberModel.findOne({ groupId, userId: user._id });
   if (!existing) {
     await GroupMemberModel.create({ groupId, userId: user._id, role: "member" });
-    await ActivityModel.create({
+    await logMemberJoinedActivity({
       groupId,
       actorUserId: user._id,
-      type: "member_joined",
-      metadata: { via: "invite_link" },
+      via: "invite_link",
     });
   }
 
@@ -658,11 +680,10 @@ export async function acceptGroupInviteAction(formData: FormData) {
 
   await GroupMemberModel.create({ groupId, userId: user._id, role: "member" });
   await GroupInviteModel.updateOne({ _id: invite._id }, { $inc: { useCount: 1 } });
-  await ActivityModel.create({
+  await logMemberJoinedActivity({
     groupId,
     actorUserId: user._id,
-    type: "member_joined",
-    metadata: { via: "invite_link" },
+    via: "invite_link",
   });
   // Clean up stale pending requests when a user joins via invite link.
   await JoinRequestModel.deleteMany({ groupId, userId: user._id, status: "pending" });
@@ -716,11 +737,10 @@ export async function approveJoinRequestAction(formData: FormData) {
   const alreadyMember = await GroupMemberModel.exists({ groupId: joinReq.groupId, userId: joinReq.userId });
   if (!alreadyMember) {
     await GroupMemberModel.create({ groupId: joinReq.groupId, userId: joinReq.userId, role: "member" });
-    await ActivityModel.create({
+    await logMemberJoinedActivity({
       groupId: joinReq.groupId,
       actorUserId: joinReq.userId,
-      type: "member_joined",
-      metadata: { via: "request_approved" },
+      via: "request_approved",
     });
   }
   await notifyJoinRequestDecision({

@@ -222,7 +222,7 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
             <GroupInviteButton
               shareUrl={inviteUrl}
               groupName={group.name}
-              buttonLabel="Share Group"
+              buttonLabel="Invite Friends"
               helperText="Anyone can view and join this public group."
             />
           ) : null}
@@ -446,20 +446,6 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
                   Regenerate link
                 </button>
               </form>
-              <form
-                action={deleteGroupAction}
-                className="mt-4 border-t border-border-light pt-4"
-                onSubmit={(e) => {
-                  if (!confirm("Delete this group and all its markets, bets, and activity? This cannot be undone.")) {
-                    e.preventDefault();
-                  }
-                }}
-              >
-                <input type="hidden" name="groupId" value={group.id} />
-                <button className="rounded-xl border border-decrease/30 px-4 py-2 text-sm font-medium text-decrease transition hover:bg-decrease/10">
-                  Delete group
-                </button>
-              </form>
             </div>
           </div>
 
@@ -498,6 +484,21 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
               </div>
             </div>
           ) : null}
+
+          <form
+            action={deleteGroupAction}
+            className="mt-6 border-t border-border-light pt-5"
+            onSubmit={(e) => {
+              if (!confirm("Delete this group and all its markets, bets, and activity? This cannot be undone.")) {
+                e.preventDefault();
+              }
+            }}
+          >
+            <input type="hidden" name="groupId" value={group.id} />
+            <button className="rounded-xl border border-decrease/30 px-4 py-2 text-sm font-medium text-decrease transition hover:bg-decrease/10">
+              Delete group
+            </button>
+          </form>
         </div>
       ) : null}
     </section>
