@@ -4,7 +4,7 @@ import { createGroupAction, joinGroupAction } from "@/app/actions";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type GroupEntry = {
   id: string;
@@ -65,6 +65,15 @@ export function GroupsDirectory({ groups }: { groups: GroupsPayload }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const inviteInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (!showCreate) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [showCreate]);
+
   const term = search.trim().toLowerCase();
   const filteredMyGroups = term
     ? groups.myGroups.filter((g) => g.name.toLowerCase().includes(term))
@@ -123,22 +132,26 @@ export function GroupsDirectory({ groups }: { groups: GroupsPayload }) {
 
         {showCreate ? (
           <div
-            className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 p-4"
             onClick={() => setShowCreate(false)}
           >
             <div
               className="w-full max-w-md rounded-2xl border border-border bg-white p-4 shadow-xl sm:p-5"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-3 flex flex-col">
+                <span className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-foreground-tertiary/30" />
+                <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Create group</h2>
                 <button
                   type="button"
                   onClick={() => setShowCreate(false)}
                   className="rounded-md px-2 py-1 text-sm text-foreground-tertiary transition hover:bg-background-secondary hover:text-foreground-secondary"
+                  aria-label="Close create group modal"
                 >
-                  Close
+                  ✕
                 </button>
+              </div>
               </div>
               <form action={createGroupAction} className="grid gap-2">
                 <input
