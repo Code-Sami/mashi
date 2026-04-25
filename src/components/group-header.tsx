@@ -178,7 +178,7 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
             ) : null}
             <h1 className="text-2xl font-bold">{group.name}</h1>
             {isPrivate ? (
-              <span className="rounded-lg bg-foreground-tertiary/20 px-2 py-0.5 text-xs font-semibold text-foreground-secondary">Approval required</span>
+              <span className="rounded-lg bg-foreground-tertiary/20 px-2 py-0.5 text-xs font-semibold text-foreground-secondary">Private</span>
             ) : isLlmArena ? (
               <span className="rounded-lg bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-600">AI-Powered</span>
             ) : (
