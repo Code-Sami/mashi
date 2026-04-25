@@ -21,12 +21,13 @@ import {
 } from "@/app/actions";
 import { CreateMarketButton } from "@/components/create-market-modal";
 import { GroupInviteButton } from "@/components/group-invite-button";
+import { UserAvatar } from "@/components/user-avatar";
 
 type Member = {
   userId: string;
   name: string;
   role: string;
-  initials: string;
+  avatarUrl?: string | null;
   isBot?: boolean;
 };
 
@@ -34,7 +35,7 @@ type PendingRequest = {
   id: string;
   userId: string;
   name: string;
-  initials: string;
+  avatarUrl?: string | null;
   createdAt: string | null;
 };
 
@@ -330,15 +331,22 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
             {members.map((member) => (
               <div key={member.userId} className="flex items-center justify-between gap-3 rounded-xl border border-border-light p-2.5">
                 <div className="flex items-center gap-3">
-                  <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${member.isBot ? "bg-violet-100 text-violet-600" : "bg-brand/10 text-brand-dark"}`}>
-                    {member.isBot ? (
+                  {member.isBot ? (
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-100 text-violet-600">
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <rect x="3" y="8" width="18" height="12" rx="2" />
                         <path strokeLinecap="round" d="M12 8V5m-4 7h.01M16 12h.01M9 16h6" />
                         <circle cx="12" cy="5" r="1" fill="currentColor" />
                       </svg>
-                    ) : member.initials}
-                  </div>
+                    </div>
+                  ) : (
+                    <UserAvatar
+                      name={member.name}
+                      avatarUrl={member.avatarUrl}
+                      sizeClassName="h-8 w-8"
+                      textClassName="text-xs"
+                    />
+                  )}
                   <div>
                     <div className="flex items-center gap-1.5">
                       <Link href={`/users/${member.userId}`} className="text-sm font-medium text-brand-dark hover:underline">
@@ -399,9 +407,12 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
                   pendingRequests.map((req) => (
                     <div key={req.id} className="flex items-center justify-between rounded-xl border border-border-light p-3">
                       <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand-dark">
-                          {req.initials}
-                        </div>
+                        <UserAvatar
+                          name={req.name}
+                          avatarUrl={req.avatarUrl}
+                          sizeClassName="h-8 w-8"
+                          textClassName="text-xs"
+                        />
                         <div>
                           <Link href={`/users/${req.userId}`} className="text-sm font-medium text-brand-dark hover:underline">{req.name}</Link>
                           <p className="text-xs text-foreground-tertiary">{req.createdAt ? <LocalDate iso={req.createdAt} style="date" /> : ""}</p>

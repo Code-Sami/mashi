@@ -9,7 +9,7 @@ import { getGroupPageData } from "@/lib/queries";
 import { isEffectiveGroupOwner } from "@/lib/super-admin";
 import { appBaseUrl } from "@/lib/password-reset-email";
 import { getJoinModeFromVisibility, getOrCreateActiveGroupInvite } from "@/lib/invites";
-import { getInitials, relativeTime } from "@/lib/utils";
+import { relativeTime } from "@/lib/utils";
 import { notFound } from "next/navigation";
 import { getAuthUserOrNull } from "@/lib/session";
 import { connectToDatabase } from "@/lib/mongodb";
@@ -81,12 +81,12 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
             userId: m.userId,
             name: m.name,
             role: m.role,
-            initials: getInitials(m.name),
+            avatarUrl: m.avatarUrl,
             isBot: m.isBot,
           }))}
           pendingRequests={data.pendingRequests.map((req) => ({
             ...req,
-            initials: getInitials(req.name),
+            avatarUrl: req.avatarUrl,
           }))}
           infoMessage={infoMessage}
           createMarketMembers={data.members.map((m) => ({
