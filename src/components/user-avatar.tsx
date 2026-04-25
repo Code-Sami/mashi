@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getInitials } from "@/lib/utils";
 
 type UserAvatarProps = {
@@ -23,6 +23,11 @@ export function UserAvatar({
   const showImage = normalizedUrl.length > 0 && !imageFailed;
   const initials = useMemo(() => getInitials(name || "Member"), [name]);
 
+  useEffect(() => {
+    // Retry loading whenever the source URL changes.
+    setImageFailed(false);
+  }, [normalizedUrl]);
+
   return (
     <div
       className={`overflow-hidden rounded-full bg-brand/10 text-brand-dark ${sizeClassName} ${className}`.trim()}
@@ -34,8 +39,6 @@ export function UserAvatar({
           alt={`${name} avatar`}
           className="h-full w-full object-cover"
           onError={() => setImageFailed(true)}
-          loading="lazy"
-          referrerPolicy="no-referrer"
         />
       ) : (
         <div className={`flex h-full w-full items-center justify-center font-bold ${textClassName}`.trim()}>
