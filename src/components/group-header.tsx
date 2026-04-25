@@ -6,8 +6,10 @@ import { useState } from "react";
 import { DeadlineInput } from "@/components/deadline-input";
 import { LocalDate } from "@/components/local-date";
 import {
+  joinGroupAction,
   leaveGroupAction,
   removeMemberAction,
+  requestJoinGroupAction,
   updateGroupAction,
   approveJoinRequestAction,
   denyJoinRequestAction,
@@ -180,7 +182,7 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
             ) : isLlmArena ? (
               <span className="rounded-lg bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-600">AI-Powered</span>
             ) : (
-              <span className="rounded-lg bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand-dark">Invite link join</span>
+              <span className="rounded-lg bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand-dark">Public</span>
             )}
           </div>
           <button
@@ -196,10 +198,28 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
           {group.isMember && createMarketMembers ? (
             <CreateMarketButton groupId={group.id} members={createMarketMembers} moderation={moderation} />
           ) : null}
+          {!group.isMember && group.visibility === "private" ? (
+            myPendingRequest ? (
+              <span className="rounded-xl bg-foreground-tertiary/20 px-4 py-2 text-sm font-medium text-foreground-secondary">Request pending</span>
+            ) : (
+              <form action={requestJoinGroupAction}>
+                <input type="hidden" name="groupId" value={group.id} />
+                <button className="rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">
+                  Request to join
+                </button>
+              </form>
+            )
+          ) : null}
+          {!group.isMember && group.visibility === "public" ? (
+            <form action={joinGroupAction}>
+              <input type="hidden" name="groupId" value={group.id} />
+              <button className="rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">
+                Join group
+              </button>
+            </form>
+          ) : null}
           {group.isMember ? (
             <GroupInviteButton inviteUrl={inviteUrl} groupName={group.name} joinMode={inviteJoinMode} />
-          ) : myPendingRequest ? (
-            <span className="rounded-xl bg-foreground-tertiary/20 px-4 py-2 text-sm font-medium text-foreground-secondary">Request pending</span>
           ) : null}
           {group.isMember && !isOwner ? (
             <form action={leaveGroupAction}>

@@ -197,25 +197,43 @@ export async function getGroupsDirectoryData(userId: string) {
   await ensureSeedData();
 
   const memberships = await GroupMemberModel.find({ userId }).lean();
-  const groupIds = memberships.map((membership) => membership.groupId);
+  const myGroupIds = memberships.map((membership) => membership.groupId);
   const membershipSet = new Set(memberships.map((membership) => membership.groupId.toString()));
-  const groups = await GroupModel.find({ _id: { $in: groupIds } }).sort({ createdAt: -1 }).lean();
+  const [myGroups, publicGroups] = await Promise.all([
+    GroupModel.find({ _id: { $in: myGroupIds } }).sort({ createdAt: -1 }).lean(),
+    GroupModel.find({
+      visibility: "public",
+      _id: { $nin: myGroupIds },
+    }).sort({ createdAt: -1 }).lean(),
+  ]);
+  const allGroups = [...myGroups, ...publicGroups];
   const allMembers = await GroupMemberModel.find({
-    groupId: { $in: groups.map((group) => group._id) },
+    groupId: { $in: allGroups.map((group) => group._id) },
   }).lean();
-  const myPendingRequests = await JoinRequestModel.find({ userId, status: "pending", groupId: { $in: groupIds } }).lean();
+  const myPendingRequests = await JoinRequestModel.find({
+    userId,
+    status: "pending",
+    groupId: { $in: allGroups.map((g) => g._id) },
+  }).lean();
   const pendingSet = new Set(myPendingRequests.map((r) => r.groupId.toString()));
 
-  return groups
-    .map((group) => ({
-      id: group._id.toString(),
-      name: group.name,
-      visibility: (group.visibility || "public") as "public" | "private",
-      memberCount: allMembers.filter((member) => member.groupId.toString() === group._id.toString()).length,
-      isMember: membershipSet.has(group._id.toString()),
-      hasPendingRequest: pendingSet.has(group._id.toString()),
-    }))
-    .sort((a, b) => b.memberCount - a.memberCount || a.name.localeCompare(b.name));
+  const mapGroup = (group: (typeof allGroups)[number]) => ({
+    id: group._id.toString(),
+    name: group.name,
+    visibility: (group.visibility || "public") as "public" | "private",
+    memberCount: allMembers.filter((member) => member.groupId.toString() === group._id.toString()).length,
+    isMember: membershipSet.has(group._id.toString()),
+    hasPendingRequest: pendingSet.has(group._id.toString()),
+  });
+
+  return {
+    myGroups: myGroups
+      .map(mapGroup)
+      .sort((a, b) => b.memberCount - a.memberCount || a.name.localeCompare(b.name)),
+    publicGroups: publicGroups
+      .map(mapGroup)
+      .sort((a, b) => b.memberCount - a.memberCount || a.name.localeCompare(b.name)),
+  };
 }
 
 export async function getMarketDetailData(marketId: string) {
@@ -345,7 +363,7 @@ export async function getGroupPageData(groupId: string, userId: string) {
   if (!group) return null;
 
   const isMember = Boolean(await GroupMemberModel.exists({ groupId, userId }));
-  const canViewContent = isMember;
+  const canViewContent = (group.visibility || "public") === "public" || isMember;
 
   if (!canViewContent) {
     const memberCount = await GroupMemberModel.countDocuments({ groupId });

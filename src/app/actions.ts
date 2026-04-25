@@ -23,7 +23,7 @@ import { ModerationLogModel } from "@/models/ModerationLog";
 import { NotificationModel } from "@/models/Notification";
 import { moderateQuestion } from "@/lib/moderation";
 import { safeInternalPath } from "@/lib/safe-internal-path";
-import { isEffectiveGroupOwner } from "@/lib/super-admin";
+import { isEffectiveGroupOwner, isSuperAdminUserId } from "@/lib/super-admin";
 import {
   notifyJoinRequestDecision,
   notifyJoinRequestSubmitted,
@@ -195,7 +195,9 @@ export async function removeMemberAction(formData: FormData) {
   if (!isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString())) {
     throw new Error("Only the group owner can remove members.");
   }
-  if (memberUserId === user._id.toString()) {
+  const isActualOwner = group.ownerId.toString() === user._id.toString();
+  const isSuperAdmin = isSuperAdminUserId(user._id.toString());
+  if (memberUserId === user._id.toString() && isActualOwner && !isSuperAdmin) {
     throw new Error("Owner cannot remove themselves.");
   }
   await GroupMemberModel.deleteOne({ groupId, userId: memberUserId });

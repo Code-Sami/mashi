@@ -286,7 +286,11 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
           <p className="mt-4 text-lg font-semibold">You are not in this group yet</p>
-          <p className="mt-1 text-sm text-foreground-tertiary">Ask for an invite link to join this group.</p>
+          <p className="mt-1 text-sm text-foreground-tertiary">
+            {data.group.visibility === "private"
+              ? "Use the request button above to ask for access, or join via invite link."
+              : "Join via invite link to access this group."}
+          </p>
         </section>
       )}
     </div>
