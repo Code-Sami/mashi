@@ -10,7 +10,6 @@ import { MarketQuestionWithMentions } from "@/components/market-question-with-me
 import { PriceHistoryChart } from "@/components/price-history-chart";
 import { SettlementCard, SettlementPopup } from "@/components/settlement-popup";
 import { connectToDatabase } from "@/lib/mongodb";
-import { getJoinModeFromVisibility, getOrCreateActiveGroupInvite } from "@/lib/invites";
 import { getPrices } from "@/lib/market";
 import { getMarketDetailData } from "@/lib/queries";
 import { GroupMemberModel } from "@/models/GroupMember";
@@ -111,41 +110,42 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
     : false;
 
   if (requiresApproval && !isMember) {
-    const visibility = (groupVisibility === "private" ? "private" : "public") as "public" | "private";
-    const invite = await getOrCreateActiveGroupInvite(
-      marketLean.groupId.toString(),
-      (groupLean as { ownerId: { toString(): string } }).ownerId.toString(),
-      getJoinModeFromVisibility(visibility),
-    );
-    const inviteHref = `/invite/${invite.code}`;
     return (
       <div className="grid gap-6">
         <section className="rounded-2xl border border-border bg-white p-8 text-center shadow-[var(--card-shadow)]">
           <h1 className="text-xl font-bold">Members only market</h1>
-          <p className="mt-2 text-sm text-foreground-secondary">
-            Market: <span className="font-medium text-foreground">{marketLean.question}</span>
-          </p>
           <p className="mt-1 text-sm text-foreground-secondary">
             Group: <span className="font-medium text-foreground">{groupLean.name}</span>
           </p>
           <p className="mt-2 text-sm text-foreground-secondary">
-            {requiresApproval
-              ? "Request access to this group to view and participate."
-              : "Join the group to view and bet on this market."}
+            This market belongs to {groupLean.name}. Request access to the group to view and participate.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <Link
-              href={inviteHref}
-              className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover"
-            >
-              Request access
-            </Link>
-            <Link
-              href={inviteHref}
-              className="inline-flex items-center rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground-secondary transition hover:bg-background-secondary"
-            >
-              Open invite
-            </Link>
+            {user ? (
+              <>
+                <Link
+                  href={`/groups/${marketLean.groupId.toString()}`}
+                  className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover"
+                >
+                  Request access
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  href={`/login?callbackUrl=${encodeURIComponent(`/groups/${marketLean.groupId.toString()}`)}`}
+                  className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover"
+                >
+                  Log in
+                </Link>
+                <Link
+                  href={`/signup?callbackUrl=${encodeURIComponent(`/groups/${marketLean.groupId.toString()}`)}`}
+                  className="inline-flex items-center rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground-secondary transition hover:bg-background-secondary"
+                >
+                  Sign up
+                </Link>
+              </>
+            )}
           </div>
         </section>
       </div>
