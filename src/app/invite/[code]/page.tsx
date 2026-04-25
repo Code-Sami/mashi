@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { acceptGroupInviteAction } from "@/app/actions";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { connectToDatabase } from "@/lib/mongodb";
 import { getAuthUserOrNull } from "@/lib/session";
+import { ActivityModel } from "@/models/Activity";
 import { GroupModel } from "@/models/Group";
 import { GroupInviteModel } from "@/models/GroupInvite";
 import { GroupMemberModel } from "@/models/GroupMember";
+import { JoinRequestModel } from "@/models/JoinRequest";
 
 type PageProps = {
   params: Promise<{ code: string }>;
@@ -85,19 +89,18 @@ export default async function InvitePage({ params }: PageProps) {
     );
   }
 
-  return (
-    <div className="mx-auto max-w-lg rounded-2xl border border-border bg-white p-8 shadow-[var(--card-shadow)]">
-      <h1 className="text-2xl font-bold">Join {group.name}</h1>
-      <p className="mt-2 text-sm text-foreground-secondary">
-        Join group with this invite link.
-      </p>
-      <form action={acceptGroupInviteAction} className="mt-5">
-        <input type="hidden" name="code" value={code} />
-        <button className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">
-          Join group
-        </button>
-      </form>
-    </div>
-  );
+  // Auto-join when a logged-in user lands on a valid invite link.
+  await GroupMemberModel.create({ groupId: group._id, userId: user._id, role: "member" });
+  await GroupInviteModel.updateOne({ _id: invite._id }, { $inc: { useCount: 1 } });
+  await ActivityModel.create({
+    groupId: group._id,
+    actorUserId: user._id,
+    type: "member_joined",
+    metadata: { via: "invite_link" },
+  });
+  await JoinRequestModel.deleteMany({ groupId: group._id, userId: user._id, status: "pending" });
+  revalidatePath("/groups");
+  revalidatePath(`/groups/${group._id.toString()}`);
+  redirect(`/groups/${group._id.toString()}?joined=1`);
 }
 
