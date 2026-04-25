@@ -23,8 +23,10 @@ export function GroupsDirectory({ groups }: { groups: GroupEntry[] }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [showJoinInvite, setShowJoinInvite] = useState(false);
   const [inviteInput, setInviteInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const inviteInputRef = useRef<HTMLInputElement>(null);
 
   const filtered = search.trim()
     ? groups.filter((g) => g.name.toLowerCase().includes(search.trim().toLowerCase()))
@@ -38,16 +40,28 @@ export function GroupsDirectory({ groups }: { groups: GroupEntry[] }) {
             <h1 className="text-2xl font-bold">My Groups</h1>
             <p className="mt-1 text-sm text-foreground-secondary">Create a group, share the invite link, and start making markets with friends.</p>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setShowCreate(true);
-              requestAnimationFrame(() => inputRef.current?.focus());
-            }}
-            className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover"
-          >
-            Create group
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowJoinInvite((prev) => !prev);
+                requestAnimationFrame(() => inviteInputRef.current?.focus());
+              }}
+              className="rounded-xl border border-border px-4 py-2.5 text-sm font-medium transition hover:border-brand hover:text-brand-dark"
+            >
+              Join with invite
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowCreate(true);
+                requestAnimationFrame(() => inputRef.current?.focus());
+              }}
+              className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover"
+            >
+              Create group
+            </button>
+          </div>
         </div>
 
         <div className="mt-4 flex gap-2">
@@ -104,27 +118,30 @@ export function GroupsDirectory({ groups }: { groups: GroupEntry[] }) {
           </form>
         ) : null}
 
-        <form
-          className="mt-3 flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const raw = inviteInput.trim();
-            if (!raw) return;
-            const code = raw.includes("/invite/") ? raw.split("/invite/").pop()?.split(/[?#]/)[0] || "" : raw.replace(/[^a-zA-Z0-9_-]/g, "");
-            if (!code) return;
-            router.push(`/invite/${code}`);
-          }}
-        >
-          <input
-            value={inviteInput}
-            onChange={(e) => setInviteInput(e.target.value)}
-            placeholder="Paste invite link or code"
-            className="flex-1 rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-          />
-          <button className="rounded-xl border border-border px-4 py-2.5 text-sm font-medium transition hover:border-brand hover:text-brand-dark">
-            Join with invite
-          </button>
-        </form>
+        {showJoinInvite ? (
+          <form
+            className="mt-3 flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const raw = inviteInput.trim();
+              if (!raw) return;
+              const code = raw.includes("/invite/") ? raw.split("/invite/").pop()?.split(/[?#]/)[0] || "" : raw.replace(/[^a-zA-Z0-9_-]/g, "");
+              if (!code) return;
+              router.push(`/invite/${code}`);
+            }}
+          >
+            <input
+              ref={inviteInputRef}
+              value={inviteInput}
+              onChange={(e) => setInviteInput(e.target.value)}
+              placeholder="Paste invite link or code"
+              className="flex-1 rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            />
+            <button className="rounded-xl border border-border px-4 py-2.5 text-sm font-medium transition hover:border-brand hover:text-brand-dark">
+              Open invite
+            </button>
+          </form>
+        ) : null}
 
         <div className="mt-4 grid gap-2">
           {filtered.length === 0 ? (
