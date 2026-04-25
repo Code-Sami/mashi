@@ -273,7 +273,7 @@ export async function getUnreadNotificationCount(userId: string) {
 export async function getNotificationInbox(userId: string) {
   await connectToDatabase();
   const rows = await NotificationModel.find({ recipientUserId: userId })
-    .sort({ readAt: 1, createdAt: -1 })
+    .sort({ createdAt: -1 })
     .limit(100)
     .lean();
   const actorIds = [...new Set(rows.map((n) => n.actorUserId?.toString()).filter(Boolean) as string[])];
