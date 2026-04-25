@@ -196,7 +196,7 @@ export default async function DashboardPage() {
           {data.groups.length === 0 ? (
             <p className="text-sm text-foreground-tertiary">
               No groups yet.{" "}
-              <Link href="/groups" className="font-medium text-brand-dark hover:underline">Browse groups</Link>
+              <Link href="/groups" className="font-medium text-brand-dark hover:underline">Create or join with invite</Link>
             </p>
           ) : (
             data.groups.map((group) => (

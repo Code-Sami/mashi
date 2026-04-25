@@ -58,6 +58,8 @@ function fallbackUsername(user: {
   return `user${user._id.toString().slice(-6)}`;
 }
 
+const MEMBER_JOIN_ACTIVITY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
 export async function getDashboardData(userId: string) {
   await connectToDatabase();
   await ensureSeedData();
@@ -197,24 +199,43 @@ export async function getGroupsDirectoryData(userId: string) {
   await ensureSeedData();
 
   const memberships = await GroupMemberModel.find({ userId }).lean();
+  const myGroupIds = memberships.map((membership) => membership.groupId);
   const membershipSet = new Set(memberships.map((membership) => membership.groupId.toString()));
-  const groups = await GroupModel.find().lean();
+  const [myGroups, publicGroups] = await Promise.all([
+    GroupModel.find({ _id: { $in: myGroupIds } }).sort({ createdAt: -1 }).lean(),
+    GroupModel.find({
+      visibility: "public",
+      _id: { $nin: myGroupIds },
+    }).sort({ createdAt: -1 }).lean(),
+  ]);
+  const allGroups = [...myGroups, ...publicGroups];
   const allMembers = await GroupMemberModel.find({
-    groupId: { $in: groups.map((group) => group._id) },
+    groupId: { $in: allGroups.map((group) => group._id) },
   }).lean();
-  const myPendingRequests = await JoinRequestModel.find({ userId, status: "pending" }).lean();
+  const myPendingRequests = await JoinRequestModel.find({
+    userId,
+    status: "pending",
+    groupId: { $in: allGroups.map((g) => g._id) },
+  }).lean();
   const pendingSet = new Set(myPendingRequests.map((r) => r.groupId.toString()));
 
-  return groups
-    .map((group) => ({
-      id: group._id.toString(),
-      name: group.name,
-      visibility: (group.visibility || "public") as "public" | "private",
-      memberCount: allMembers.filter((member) => member.groupId.toString() === group._id.toString()).length,
-      isMember: membershipSet.has(group._id.toString()),
-      hasPendingRequest: pendingSet.has(group._id.toString()),
-    }))
-    .sort((a, b) => b.memberCount - a.memberCount);
+  const mapGroup = (group: (typeof allGroups)[number]) => ({
+    id: group._id.toString(),
+    name: group.name,
+    visibility: (group.visibility || "public") as "public" | "private",
+    memberCount: allMembers.filter((member) => member.groupId.toString() === group._id.toString()).length,
+    isMember: membershipSet.has(group._id.toString()),
+    hasPendingRequest: pendingSet.has(group._id.toString()),
+  });
+
+  return {
+    myGroups: myGroups
+      .map(mapGroup)
+      .sort((a, b) => b.memberCount - a.memberCount || a.name.localeCompare(b.name)),
+    publicGroups: publicGroups
+      .map(mapGroup)
+      .sort((a, b) => b.memberCount - a.memberCount || a.name.localeCompare(b.name)),
+  };
 }
 
 export async function getMarketDetailData(marketId: string) {
@@ -336,26 +357,28 @@ export async function getMarketDetailData(marketId: string) {
   };
 }
 
-export async function getGroupPageData(groupId: string, userId: string) {
+export async function getGroupPageData(groupId: string, userId?: string | null) {
   await connectToDatabase();
   await ensureSeedData();
 
   const group = await GroupModel.findById(groupId).lean();
   if (!group) return null;
 
-  const isMember = Boolean(await GroupMemberModel.exists({ groupId, userId }));
+  const isMember = userId ? Boolean(await GroupMemberModel.exists({ groupId, userId })) : false;
   const canViewContent = (group.visibility || "public") === "public" || isMember;
 
   if (!canViewContent) {
     const memberCount = await GroupMemberModel.countDocuments({ groupId });
-    const myPendingRequest = Boolean(await JoinRequestModel.exists({ groupId, userId, status: "pending" }));
+    const myPendingRequest = userId
+      ? Boolean(await JoinRequestModel.exists({ groupId, userId, status: "pending" }))
+      : false;
 
     return {
       group: {
         id: group._id.toString(),
         name: group.name,
         visibility: (group.visibility || "public") as "public" | "private",
-        ownerId: group.ownerId?.toString?.() || userId,
+        ownerId: group.ownerId?.toString?.() || "",
         isMember,
         canViewContent,
         memberCount,
@@ -373,7 +396,7 @@ export async function getGroupPageData(groupId: string, userId: string) {
 
   const members = await GroupMemberModel.find({ groupId }).lean();
   const ownerMembership = members.find((member) => member.role === "owner");
-  const fallbackOwnerId = ownerMembership?.userId?.toString() || members[0]?.userId?.toString() || userId;
+  const fallbackOwnerId = ownerMembership?.userId?.toString() || members[0]?.userId?.toString() || "";
   const memberUsers = await UserModel.find({
     _id: { $in: members.map((member) => member.userId) },
   }).lean();
@@ -381,7 +404,21 @@ export async function getGroupPageData(groupId: string, userId: string) {
 
   const markets = await MarketModel.find({ groupId }).sort({ createdAt: -1 }).lean();
   const marketTitleById = new Map(markets.map((market) => [market._id.toString(), market.question]));
-  const activities = await ActivityModel.find({ groupId }).sort({ createdAt: -1 }).limit(20).lean();
+  const activityRows = await ActivityModel.find({ groupId }).sort({ createdAt: -1 }).limit(100).lean();
+  const memberJoinedSeen = new Map<string, number>();
+  const activities = activityRows
+    .filter((item) => {
+      if (item.type !== "member_joined") return true;
+      const actorId = item.actorUserId.toString();
+      const createdAtMs = item.createdAt ? new Date(item.createdAt).getTime() : 0;
+      const lastSeenMs = memberJoinedSeen.get(actorId);
+      if (typeof lastSeenMs === "number" && lastSeenMs - createdAtMs < MEMBER_JOIN_ACTIVITY_COOLDOWN_MS) {
+        return false;
+      }
+      memberJoinedSeen.set(actorId, createdAtMs);
+      return true;
+    })
+    .slice(0, 20);
   const activityActorIds = [...new Set(activities.map((item) => item.actorUserId.toString()))];
   const activityActors = await UserModel.find({ _id: { $in: activityActorIds } }).lean();
   const activityActorMap = new Map(activityActors.map((user) => [user._id.toString(), user]));
@@ -449,7 +486,7 @@ export async function getGroupPageData(groupId: string, userId: string) {
   }
 
   const actualOwnerId = group.ownerId?.toString?.() || fallbackOwnerId;
-  const isOwner = isEffectiveGroupOwner(userId, actualOwnerId);
+  const isOwner = userId ? isEffectiveGroupOwner(userId, actualOwnerId) : false;
   const pendingRequests = isOwner
     ? await (async () => {
         const reqs = await JoinRequestModel.find({ groupId, status: "pending" }).lean();
@@ -466,7 +503,7 @@ export async function getGroupPageData(groupId: string, userId: string) {
       })()
     : [];
 
-  const myPendingRequest = !isMember
+  const myPendingRequest = userId && !isMember
     ? Boolean(await JoinRequestModel.exists({ groupId, userId, status: "pending" }))
     : false;
 
@@ -552,26 +589,53 @@ export async function getGroupPageData(groupId: string, userId: string) {
   };
 }
 
-export async function getPublicUserProfileData(userId: string) {
+export async function getPublicUserProfileData(userId: string, viewerUserId?: string | null) {
   await connectToDatabase();
   await ensureSeedData();
 
   const user = await UserModel.findById(userId).lean();
   if (!user) return null;
 
+  const isSelfView = Boolean(viewerUserId && viewerUserId === userId);
+  const viewerMembershipSet = new Set<string>();
+  if (viewerUserId && !isSelfView) {
+    const viewerMemberships = await GroupMemberModel.find({ userId: viewerUserId }, { groupId: 1 }).lean();
+    viewerMemberships.forEach((m) => viewerMembershipSet.add(m.groupId.toString()));
+  }
+
   const memberships = await GroupMemberModel.find({ userId }).sort({ createdAt: -1 }).lean();
   const groupIds = memberships.map((membership) => membership.groupId);
   const groups = await GroupModel.find({ _id: { $in: groupIds } }).lean();
   const groupMap = new Map(groups.map((group) => [group._id.toString(), group]));
+  const visibleGroupIdSet = new Set(
+    groups
+      .filter((group) => {
+        if (isSelfView) return true;
+        if ((group.visibility || "public") === "public") return true;
+        return viewerMembershipSet.has(group._id.toString());
+      })
+      .map((group) => group._id.toString()),
+  );
+  const visibleMemberships = memberships.filter((membership) =>
+    visibleGroupIdSet.has(membership.groupId.toString()),
+  );
 
-  const createdMarkets = await MarketModel.find({ umpireId: userId }).sort({ createdAt: -1 }).lean();
+  const createdMarketsAll = await MarketModel.find({ umpireId: userId }).sort({ createdAt: -1 }).lean();
+  const createdMarkets = createdMarketsAll.filter((market) =>
+    visibleGroupIdSet.has(market.groupId.toString()),
+  );
   const createdMarketGroupIds = [...new Set(createdMarkets.map((market) => market.groupId.toString()))];
   const createdMarketGroups = await GroupModel.find({ _id: { $in: createdMarketGroupIds } }).lean();
   const createdMarketGroupMap = new Map(createdMarketGroups.map((group) => [group._id.toString(), group.name]));
 
-  const userBets = await BetModel.find({ userId }).sort({ createdAt: -1 }).lean();
-  const betMarketIds = [...new Set(userBets.map((bet) => bet.marketId.toString()))];
-  const betMarkets = await MarketModel.find({ _id: { $in: betMarketIds } }).lean();
+  const userBetsAll = await BetModel.find({ userId }).sort({ createdAt: -1 }).lean();
+  const betMarketIds = [...new Set(userBetsAll.map((bet) => bet.marketId.toString()))];
+  const betMarketsAll = await MarketModel.find({ _id: { $in: betMarketIds } }).lean();
+  const betMarkets = betMarketsAll.filter((market) =>
+    visibleGroupIdSet.has(market.groupId.toString()),
+  );
+  const visibleBetMarketIdSet = new Set(betMarkets.map((market) => market._id.toString()));
+  const userBets = userBetsAll.filter((bet) => visibleBetMarketIdSet.has(bet.marketId.toString()));
   const betMarketMap = new Map(betMarkets.map((market) => [market._id.toString(), market]));
 
   const resolvedBetMarkets = betMarkets.filter((market) => market.status === "resolved" && market.outcome);
@@ -618,7 +682,8 @@ export async function getPublicUserProfileData(userId: string) {
     }
   }
 
-  const activity = await ActivityModel.find({ actorUserId: userId }).sort({ createdAt: -1 }).limit(40).lean();
+  const activityAll = await ActivityModel.find({ actorUserId: userId }).sort({ createdAt: -1 }).limit(80).lean();
+  const activity = activityAll.filter((item) => visibleGroupIdSet.has(item.groupId.toString())).slice(0, 40);
   const activityMarketIds = [...new Set(activity.map((item) => item.marketId?.toString()).filter(Boolean) as string[])];
   const activityGroupIds = [...new Set(activity.map((item) => item.groupId.toString()))];
   const activityMarkets = await MarketModel.find({ _id: { $in: activityMarketIds } }).lean();
@@ -643,7 +708,7 @@ export async function getPublicUserProfileData(userId: string) {
       botProvider: (user.botProvider as string) || null,
       botModel: (user.botModel as string) || null,
     },
-    groups: memberships.map((membership) => {
+    groups: visibleMemberships.map((membership) => {
       const group = groupMap.get(membership.groupId.toString());
       return {
         id: membership.groupId.toString(),

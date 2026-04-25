@@ -52,7 +52,7 @@ export default async function PublicUserProfilePage({ params }: UserProfilePageP
   const { userId } = await params;
   const session = await getServerSession(authOptions);
   const isOwnProfile = session?.user?.id === userId;
-  const data = await getPublicUserProfileData(userId);
+  const data = await getPublicUserProfileData(userId, session?.user?.id || null);
   if (!data) notFound();
 
   return (

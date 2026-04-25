@@ -8,9 +8,12 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { getPrices } from "@/lib/market";
 import { ensureSeedData } from "@/lib/seed";
 import { requireAuthUser } from "@/lib/session";
+import { getJoinModeFromVisibility, getOrCreateActiveGroupInvite } from "@/lib/invites";
+import { generateInviteCode } from "@/lib/utils";
 import { ActivityModel } from "@/models/Activity";
 import { BetModel } from "@/models/Bet";
 import { GroupModel } from "@/models/Group";
+import { GroupInviteModel } from "@/models/GroupInvite";
 import { GroupMemberModel } from "@/models/GroupMember";
 import { MarketModel } from "@/models/Market";
 import { MarketPriceHistoryModel } from "@/models/MarketPriceHistory";
@@ -20,7 +23,7 @@ import { ModerationLogModel } from "@/models/ModerationLog";
 import { NotificationModel } from "@/models/Notification";
 import { moderateQuestion } from "@/lib/moderation";
 import { safeInternalPath } from "@/lib/safe-internal-path";
-import { isEffectiveGroupOwner } from "@/lib/super-admin";
+import { isEffectiveGroupOwner, isSuperAdminUserId } from "@/lib/super-admin";
 import {
   notifyJoinRequestDecision,
   notifyJoinRequestSubmitted,
@@ -53,6 +56,30 @@ async function generateUniqueUsername(displayName: string, email: string) {
 
 function parseUserIdList(formData: FormData, field: string) {
   return [...new Set(formData.getAll(field).map((value) => value.toString()).filter(Boolean))];
+}
+
+const MEMBER_JOIN_ACTIVITY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+async function logMemberJoinedActivity(params: {
+  groupId: string | Types.ObjectId;
+  actorUserId: string | Types.ObjectId;
+  via: string;
+}) {
+  const recentThreshold = new Date(Date.now() - MEMBER_JOIN_ACTIVITY_COOLDOWN_MS);
+  const hasRecentJoinLog = await ActivityModel.exists({
+    groupId: params.groupId,
+    actorUserId: params.actorUserId,
+    type: "member_joined",
+    createdAt: { $gte: recentThreshold },
+  });
+  if (hasRecentJoinLog) return;
+
+  await ActivityModel.create({
+    groupId: params.groupId,
+    actorUserId: params.actorUserId,
+    type: "member_joined",
+    metadata: { via: params.via },
+  });
 }
 
 export async function signupAction(formData: FormData) {
@@ -128,12 +155,12 @@ export async function createGroupAction(formData: FormData) {
   if (!name) throw new Error("Group name is required.");
   const visibility = formData.get("visibility")?.toString() === "private" ? "private" : "public";
 
-  const publicCode = `PUBLIC-${Date.now().toString(36).toUpperCase()}`;
+  const inviteCode = generateInviteCode();
   const group = await GroupModel.create({
     name,
     description: "",
     ownerId: user._id,
-    inviteCode: publicCode,
+    inviteCode,
   });
   await conn.connection.db!.collection("groups").updateOne(
     { _id: group._id },
@@ -141,11 +168,11 @@ export async function createGroupAction(formData: FormData) {
   );
 
   await GroupMemberModel.create({ groupId: group._id, userId: user._id, role: "owner" });
-  await ActivityModel.create({
+  await getOrCreateActiveGroupInvite(group._id.toString(), user._id.toString(), getJoinModeFromVisibility(visibility));
+  await logMemberJoinedActivity({
     groupId: group._id,
     actorUserId: user._id,
-    type: "member_joined",
-    metadata: { via: "group_created" },
+    via: "group_created",
   });
 
   revalidatePath("/groups");
@@ -167,11 +194,10 @@ export async function joinGroupAction(formData: FormData) {
   const existing = await GroupMemberModel.findOne({ groupId, userId: user._id });
   if (!existing) {
     await GroupMemberModel.create({ groupId, userId: user._id, role: "member" });
-    await ActivityModel.create({
+    await logMemberJoinedActivity({
       groupId,
       actorUserId: user._id,
-      type: "member_joined",
-      metadata: { via: "public_group" },
+      via: "invite_link",
     });
   }
 
@@ -191,7 +217,9 @@ export async function removeMemberAction(formData: FormData) {
   if (!isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString())) {
     throw new Error("Only the group owner can remove members.");
   }
-  if (memberUserId === user._id.toString()) {
+  const isActualOwner = group.ownerId.toString() === user._id.toString();
+  const isSuperAdmin = isSuperAdminUserId(user._id.toString());
+  if (memberUserId === user._id.toString() && isActualOwner && !isSuperAdmin) {
     throw new Error("Owner cannot remove themselves.");
   }
   await GroupMemberModel.deleteOne({ groupId, userId: memberUserId });
@@ -520,6 +548,10 @@ export async function updateGroupAction(formData: FormData) {
     { _id: new Types.ObjectId(groupId) },
     { $set: { name, visibility } }
   );
+  await GroupInviteModel.updateMany(
+    { groupId, isActive: true },
+    { $set: { joinMode: getJoinModeFromVisibility(visibility as "public" | "private") } },
+  );
 
   revalidatePath(`/groups/${groupId}`);
   revalidatePath("/groups");
@@ -590,7 +622,7 @@ export async function requestJoinGroupAction(formData: FormData) {
   await connectToDatabase();
   const group = await GroupModel.findById(groupId).lean() as Record<string, unknown> | null;
   if (!group) throw new Error("Group not found.");
-  if (group.visibility !== "private") throw new Error("This group is public — join directly.");
+  if (group.visibility !== "private") throw new Error("This group allows invite-link auto join.");
 
   const isMember = await GroupMemberModel.exists({ groupId, userId: user._id });
   if (isMember) {
@@ -616,6 +648,76 @@ export async function requestJoinGroupAction(formData: FormData) {
   redirect(`/groups/${groupId}?info=request_sent`);
 }
 
+function isInviteValid(invite: {
+  isActive?: boolean;
+  expiresAt?: Date | null;
+  maxUses?: number | null;
+  useCount?: number;
+}) {
+  if (!invite || invite.isActive !== true) return false;
+  if (invite.expiresAt && invite.expiresAt.getTime() <= Date.now()) return false;
+  if (typeof invite.maxUses === "number" && (invite.useCount || 0) >= invite.maxUses) return false;
+  return true;
+}
+
+export async function acceptGroupInviteAction(formData: FormData) {
+  const user = await requireAuthUser();
+  const code = formData.get("code")?.toString().trim() || "";
+  if (!code) redirect("/groups");
+
+  await connectToDatabase();
+  const invite = await GroupInviteModel.findOne({ code }).lean();
+  if (!invite || !isInviteValid(invite)) redirect("/groups?error=invalid_invite");
+
+  const groupId = invite.groupId.toString();
+  const group = await GroupModel.findById(groupId).lean();
+  if (!group) redirect("/groups?error=invalid_invite");
+
+  const existingMember = await GroupMemberModel.exists({ groupId, userId: user._id });
+  if (existingMember) {
+    redirect(`/groups/${groupId}`);
+  }
+
+  await GroupMemberModel.create({ groupId, userId: user._id, role: "member" });
+  await GroupInviteModel.updateOne({ _id: invite._id }, { $inc: { useCount: 1 } });
+  await logMemberJoinedActivity({
+    groupId,
+    actorUserId: user._id,
+    via: "invite_link",
+  });
+  // Clean up stale pending requests when a user joins via invite link.
+  await JoinRequestModel.deleteMany({ groupId, userId: user._id, status: "pending" });
+  revalidatePath(`/groups/${groupId}`);
+  revalidatePath("/groups");
+  redirect(`/groups/${groupId}?joined=1`);
+}
+
+export async function regenerateGroupInviteAction(formData: FormData) {
+  const user = await requireAuthUser();
+  const groupId = formData.get("groupId")?.toString() || "";
+  if (!groupId) throw new Error("Group id is required.");
+
+  await connectToDatabase();
+  const group = await GroupModel.findById(groupId).lean();
+  if (!group) throw new Error("Group not found.");
+  if (!isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString())) {
+    throw new Error("Only the owner can regenerate invite links.");
+  }
+
+  await GroupInviteModel.updateMany(
+    { groupId, isActive: true },
+    { $set: { isActive: false } },
+  );
+
+  await getOrCreateActiveGroupInvite(
+    groupId,
+    user._id.toString(),
+    getJoinModeFromVisibility((group.visibility || "public") as "public" | "private"),
+  );
+
+  revalidatePath(`/groups/${groupId}`);
+}
+
 export async function approveJoinRequestAction(formData: FormData) {
   const user = await requireAuthUser();
   const requestId = formData.get("requestId")?.toString() || "";
@@ -635,11 +737,10 @@ export async function approveJoinRequestAction(formData: FormData) {
   const alreadyMember = await GroupMemberModel.exists({ groupId: joinReq.groupId, userId: joinReq.userId });
   if (!alreadyMember) {
     await GroupMemberModel.create({ groupId: joinReq.groupId, userId: joinReq.userId, role: "member" });
-    await ActivityModel.create({
+    await logMemberJoinedActivity({
       groupId: joinReq.groupId,
       actorUserId: joinReq.userId,
-      type: "member_joined",
-      metadata: { via: "request_approved" },
+      via: "request_approved",
     });
   }
   await notifyJoinRequestDecision({

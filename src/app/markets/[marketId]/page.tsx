@@ -1,4 +1,4 @@
-import { requestJoinGroupAction } from "@/app/actions";
+import { joinGroupAction } from "@/app/actions";
 import { BetForm } from "@/components/bet-form";
 import { BotText } from "@/components/bot-text";
 import { DeleteMarketButton } from "@/components/delete-market-button";
@@ -13,7 +13,6 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { getPrices } from "@/lib/market";
 import { getMarketDetailData } from "@/lib/queries";
 import { GroupMemberModel } from "@/models/GroupMember";
-import { JoinRequestModel } from "@/models/JoinRequest";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -91,16 +90,16 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
   const query = await searchParams;
   await connectToDatabase();
 
-  const marketLean = await MarketModel.findById(marketId, { groupId: 1 }).lean();
+  const marketLean = await MarketModel.findById(marketId, { groupId: 1, question: 1 }).lean();
   if (!marketLean) {
     notFound();
   }
-  const groupLean = await GroupModel.findById(marketLean.groupId, { name: 1, visibility: 1 }).lean();
+  const groupLean = await GroupModel.findById(marketLean.groupId, { name: 1, visibility: 1, ownerId: 1 }).lean();
   if (!groupLean) {
     notFound();
   }
   const groupVisibility = (groupLean as { visibility?: string }).visibility || "public";
-  const isPrivateGroup = groupVisibility === "private";
+  const requiresApproval = groupVisibility === "private";
   const isMember = user
     ? Boolean(
         await GroupMemberModel.exists({
@@ -110,68 +109,38 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
       )
     : false;
 
-  const myPendingJoinRequest =
-    user && isPrivateGroup && !isMember
-      ? Boolean(
-          await JoinRequestModel.exists({
-            groupId: marketLean.groupId,
-            userId: user._id,
-            status: "pending",
-          }),
-        )
-      : false;
-
-  if (isPrivateGroup && !isMember) {
-    const returnPath = `/markets/${marketId}`;
+  if (requiresApproval && !isMember) {
     return (
       <div className="grid gap-6">
         <section className="rounded-2xl border border-border bg-white p-8 text-center shadow-[var(--card-shadow)]">
-          <h1 className="text-xl font-bold">Private market</h1>
+          <h1 className="text-xl font-bold">Members only market</h1>
+          <p className="mt-1 text-sm text-foreground-secondary">
+            Group: <span className="font-medium text-foreground">{groupLean.name}</span>
+          </p>
           <p className="mt-2 text-sm text-foreground-secondary">
-            This market is only visible to members of{" "}
-            <span className="font-medium text-foreground">{groupLean.name}</span>.
-            {user ? (
-              <> Request to join the private group, then you can open this market again once you&apos;re a member.</>
-            ) : (
-              <> Sign up or log in, then you can request to join the private group and view this market.</>
-            )}
+            This market belongs to {groupLean.name}. Request access to the group to view and participate.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             {user ? (
               <>
-                {myPendingJoinRequest ? (
-                  <span className="rounded-xl bg-foreground-tertiary/20 px-4 py-2.5 text-sm font-medium text-foreground-secondary">
-                    Request pending
-                  </span>
-                ) : (
-                  <form action={requestJoinGroupAction}>
-                    <input type="hidden" name="groupId" value={marketLean.groupId.toString()} />
-                    <button
-                      type="submit"
-                      className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover"
-                    >
-                      Request to join
-                    </button>
-                  </form>
-                )}
                 <Link
                   href={`/groups/${marketLean.groupId.toString()}`}
-                  className="inline-flex items-center rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground-secondary transition hover:bg-background-secondary"
+                  className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover"
                 >
-                  View group
+                  Request access
                 </Link>
               </>
             ) : (
               <>
                 <Link
-                  href={`/login?callbackUrl=${encodeURIComponent(returnPath)}`}
+                  href={`/login?callbackUrl=${encodeURIComponent(`/groups/${marketLean.groupId.toString()}`)}`}
                   className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover"
                 >
                   Log in
                 </Link>
                 <Link
-                  href={`/signup?callbackUrl=${encodeURIComponent(returnPath)}`}
-                  className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-foreground-secondary transition hover:bg-background-secondary"
+                  href={`/signup?callbackUrl=${encodeURIComponent(`/groups/${marketLean.groupId.toString()}`)}`}
+                  className="inline-flex items-center rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground-secondary transition hover:bg-background-secondary"
                 >
                   Sign up
                 </Link>
@@ -363,7 +332,7 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
                 href={`/login?callbackUrl=${encodeURIComponent(`/markets/${data.market.id}`)}`}
                 className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover"
               >
-                Log in
+                Log in to join and bet
               </Link>
               <Link
                 href={`/signup?callbackUrl=${encodeURIComponent(`/markets/${data.market.id}`)}`}
@@ -372,6 +341,19 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
                 Sign up
               </Link>
             </div>
+          </article>
+        ) : !isMember ? (
+          <article className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6">
+            <h2 className="font-semibold">Join to bet</h2>
+            <p className="mt-2 text-sm text-foreground-secondary">
+              This is a public group market. Join the group to place bets.
+            </p>
+            <form action={joinGroupAction} className="mt-4">
+              <input type="hidden" name="groupId" value={data.market.groupId} />
+              <button className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">
+                Join group
+              </button>
+            </form>
           </article>
         ) : (
           <article className="rounded-2xl border border-border bg-white p-4 shadow-[var(--card-shadow)] sm:p-6">

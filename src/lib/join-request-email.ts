@@ -64,7 +64,7 @@ export async function sendJoinRequestDecisionEmail(params: {
   const subject = params.approved
     ? `Your request to join ${params.groupName} was approved`
     : `Your request to join ${params.groupName} was denied`;
-  const ctaLabel = params.approved ? "Open group" : "Browse groups";
+  const ctaLabel = params.approved ? "Open group" : "Go to My Groups";
   const ctaUrl = params.approved ? groupUrl : href(`${appBaseUrl()}/groups`);
 
   const { error } = await resend.emails.send({
