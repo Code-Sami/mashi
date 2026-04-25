@@ -656,36 +656,19 @@ export async function acceptGroupInviteAction(formData: FormData) {
     redirect(`/groups/${groupId}`);
   }
 
-  const joinMode = (invite.joinMode || getJoinModeFromVisibility((group.visibility || "public") as "public" | "private"));
-  if (joinMode === "auto") {
-    await GroupMemberModel.create({ groupId, userId: user._id, role: "member" });
-    await GroupInviteModel.updateOne({ _id: invite._id }, { $inc: { useCount: 1 } });
-    await ActivityModel.create({
-      groupId,
-      actorUserId: user._id,
-      type: "member_joined",
-      metadata: { via: "invite_link" },
-    });
-    revalidatePath("/groups");
-    revalidatePath(`/groups/${groupId}`);
-    redirect(`/groups/${groupId}?joined=1`);
-  }
-
-  const existingPending = await JoinRequestModel.findOne({ groupId, userId: user._id, status: "pending" });
-  if (existingPending) {
-    redirect(`/groups/${groupId}?info=already_requested`);
-  }
-
-  // For request-mode invites we count actual joins, not request attempts.
-  await JoinRequestModel.deleteMany({ groupId, userId: user._id, status: { $ne: "pending" } });
-  const joinRequest = await JoinRequestModel.create({ groupId, userId: user._id, status: "pending" });
-  await notifyJoinRequestSubmitted({
-    requestId: joinRequest._id.toString(),
+  await GroupMemberModel.create({ groupId, userId: user._id, role: "member" });
+  await GroupInviteModel.updateOne({ _id: invite._id }, { $inc: { useCount: 1 } });
+  await ActivityModel.create({
     groupId,
-    actorUserId: user._id.toString(),
+    actorUserId: user._id,
+    type: "member_joined",
+    metadata: { via: "invite_link" },
   });
+  // Clean up stale pending requests when a user joins via invite link.
+  await JoinRequestModel.deleteMany({ groupId, userId: user._id, status: "pending" });
   revalidatePath(`/groups/${groupId}`);
-  redirect(`/groups/${groupId}?info=request_sent`);
+  revalidatePath("/groups");
+  redirect(`/groups/${groupId}?joined=1`);
 }
 
 export async function regenerateGroupInviteAction(formData: FormData) {

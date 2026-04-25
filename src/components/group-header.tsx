@@ -68,7 +68,7 @@ type Props = {
   }[];
   isLlmArena?: boolean;
   inviteUrl: string;
-  inviteJoinMode: "auto" | "request";
+  groupUrl: string;
 };
 
 function ModerationLogEntry({ log, members, onDismiss }: {
@@ -149,7 +149,7 @@ function ModerationLogEntry({ log, members, onDismiss }: {
   );
 }
 
-export function GroupHeader({ group, isOwner, myPendingRequest, members, pendingRequests, infoMessage, createMarketMembers, moderation, moderationLogs, isLlmArena, inviteUrl, inviteJoinMode }: Props) {
+export function GroupHeader({ group, isOwner, myPendingRequest, members, pendingRequests, infoMessage, createMarketMembers, moderation, moderationLogs, isLlmArena, inviteUrl, groupUrl }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [tickRunning, setTickRunning] = useState(false);
@@ -218,8 +218,29 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
               </button>
             </form>
           ) : null}
-          {group.isMember ? (
-            <GroupInviteButton inviteUrl={inviteUrl} groupName={group.name} joinMode={inviteJoinMode} />
+          {group.isMember && group.visibility === "public" ? (
+            <GroupInviteButton
+              shareUrl={inviteUrl}
+              groupName={group.name}
+              buttonLabel="Share Group"
+              helperText="Anyone can view and join this public group."
+            />
+          ) : null}
+          {group.isMember && group.visibility === "private" && isOwner ? (
+            <GroupInviteButton
+              shareUrl={inviteUrl}
+              groupName={group.name}
+              buttonLabel="Invite Friends"
+              helperText="Anyone with this invite link can join automatically. Only share it with people you trust."
+            />
+          ) : null}
+          {group.isMember && group.visibility === "private" && !isOwner ? (
+            <GroupInviteButton
+              shareUrl={groupUrl}
+              groupName={group.name}
+              buttonLabel="Share Group"
+              helperText="People can request access from this page. The owner approves requests."
+            />
           ) : null}
           {group.isMember && !isOwner ? (
             <form action={leaveGroupAction}>
@@ -413,8 +434,8 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
                 <div>
                   <label className="text-sm font-medium text-foreground-secondary">Join access</label>
                   <select name="visibility" defaultValue={group.visibility} className="mt-1 w-full rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20">
-                    <option value="public">Anyone with invite link can join</option>
-                    <option value="private">Require approval to join</option>
+                    <option value="public">Public: Anyone can find and join this group</option>
+                    <option value="private">Private: Only people with an invite link can request to join</option>
                   </select>
                 </div>
                 <button className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">Save changes</button>

@@ -37,20 +37,20 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
   const query = await searchParams;
   const data = await getGroupPageData(groupId, user?._id.toString() || null);
   if (!data) notFound();
-  const defaultJoinMode = getJoinModeFromVisibility(data.group.visibility);
-  const invite = user
+  const isOwner = Boolean(user && isEffectiveGroupOwner(user._id.toString(), data.group.ownerId));
+  const canUseInviteLink =
+    Boolean(user && data.group.isMember && (data.group.visibility === "public" || isOwner));
+  const invite = canUseInviteLink
     ? await getOrCreateActiveGroupInvite(
         data.group.id,
         data.group.ownerId,
-        defaultJoinMode,
+        getJoinModeFromVisibility(data.group.visibility),
       )
     : null;
-  const inviteCode = invite?.code || "";
-  const inviteUrl = invite ? `${appBaseUrl()}/invite/${invite.code}` : "";
-  const inviteJoinMode = (invite?.joinMode || defaultJoinMode) as "auto" | "request";
+  const inviteUrl = invite ? `${appBaseUrl()}/invite/${invite.code}` : `${appBaseUrl()}/groups/${data.group.id}`;
+  const groupUrl = `${appBaseUrl()}/groups/${data.group.id}`;
   const memberNameById = new Map(data.members.map((member) => [member.userId, member.name]));
   const visibleMemberCount = (data.group as { memberCount?: number }).memberCount ?? data.members.length;
-  const isOwner = Boolean(user && isEffectiveGroupOwner(user._id.toString(), data.group.ownerId));
   const canView = data.group.canViewContent;
 
   const infoMessage =
@@ -97,7 +97,7 @@ export default async function GroupDetailPage({ params, searchParams }: PageProp
           moderationLogs={data.moderationLogs}
           isLlmArena={data.group.name === "LLM Arena"}
           inviteUrl={inviteUrl}
-          inviteJoinMode={inviteJoinMode}
+          groupUrl={groupUrl}
         />
       ) : (
         <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--card-shadow)]">

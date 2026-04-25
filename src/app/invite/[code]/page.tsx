@@ -85,19 +85,16 @@ export default async function InvitePage({ params }: PageProps) {
     );
   }
 
-  const joinMode = invite.joinMode || "auto";
   return (
     <div className="mx-auto max-w-lg rounded-2xl border border-border bg-white p-8 shadow-[var(--card-shadow)]">
       <h1 className="text-2xl font-bold">Join {group.name}</h1>
       <p className="mt-2 text-sm text-foreground-secondary">
-        {joinMode === "auto"
-          ? "Anyone with this link can join this group."
-          : "Anyone with this link can request to join. The owner approves requests."}
+        Join group with this invite link.
       </p>
       <form action={acceptGroupInviteAction} className="mt-5">
         <input type="hidden" name="code" value={code} />
         <button className="rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-dark transition hover:bg-brand-hover">
-          {joinMode === "auto" ? "Join group" : "Request to join"}
+          Join group
         </button>
       </form>
     </div>

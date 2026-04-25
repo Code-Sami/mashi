@@ -12,7 +12,8 @@ function isInviteUsable(invite: { isActive?: boolean; expiresAt?: Date | null; m
 }
 
 export function getJoinModeFromVisibility(visibility: "public" | "private"): GroupInviteJoinMode {
-  return visibility === "private" ? "request" : "auto";
+  // Invite links are always auto-admit. Private approval is handled on group URLs.
+  return "auto";
 }
 
 async function createUniqueInviteCode() {

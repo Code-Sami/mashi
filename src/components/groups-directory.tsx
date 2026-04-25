@@ -132,7 +132,7 @@ export function GroupsDirectory({ groups }: { groups: GroupsPayload }) {
             />
             <select
               name="visibility"
-              defaultValue="public"
+              defaultValue="private"
               className="rounded-xl border border-border bg-background-secondary p-2.5 text-sm transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
             >
               <option value="public">Public: Anyone can find and join this group</option>
