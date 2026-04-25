@@ -498,6 +498,7 @@ export async function getGroupPageData(groupId: string, userId?: string | null) 
           id: r._id.toString(),
           userId: r.userId.toString(),
           name: fullName(reqUserMap.get(r.userId.toString()) || {}),
+          avatarUrl: reqUserMap.get(r.userId.toString())?.avatarUrl || "",
           createdAt: r.createdAt?.toISOString() || null,
         }));
       })()
@@ -546,6 +547,7 @@ export async function getGroupPageData(groupId: string, userId?: string | null) 
         role: member.role,
         name: user ? fullName(user) : "Unknown",
         username: user ? fallbackUsername(user) : `user${member.userId.toString().slice(-6)}`,
+        avatarUrl: user?.avatarUrl || "",
         isBot: Boolean(user?.isBot),
       };
     }).filter((member) => member.name !== "Unknown"),
