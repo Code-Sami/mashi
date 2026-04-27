@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useOptimistic, useTransition } from "react";
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
 import { DeadlineInput } from "@/components/deadline-input";
 import { LocalDate } from "@/components/local-date";
 import {
@@ -71,6 +72,19 @@ type Props = {
   inviteUrl: string;
   groupUrl: string;
 };
+
+function RegenerateInviteButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      disabled={pending}
+      className="rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:border-brand hover:text-brand-dark disabled:cursor-not-allowed disabled:opacity-70"
+    >
+      {pending ? "Regenerating..." : "Regenerate link"}
+    </button>
+  );
+}
 
 function ModerationLogEntry({ log, members, onDismiss }: {
   log: Props["moderationLogs"] extends (infer T)[] | undefined ? T : never;
@@ -223,6 +237,8 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
             <GroupInviteButton
               shareUrl={inviteUrl}
               groupName={group.name}
+              groupId={group.id}
+              refreshOnOpen
               buttonLabel="Invite Friends"
               helperText="Anyone can view and join this public group."
             />
@@ -231,6 +247,8 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
             <GroupInviteButton
               shareUrl={inviteUrl}
               groupName={group.name}
+              groupId={group.id}
+              refreshOnOpen
               buttonLabel="Invite Friends"
               helperText="Anyone with this invite link can join automatically. Only share it with people you trust."
             />
@@ -453,9 +471,7 @@ export function GroupHeader({ group, isOwner, myPendingRequest, members, pending
               </form>
               <form action={regenerateGroupInviteAction} className="mt-3">
                 <input type="hidden" name="groupId" value={group.id} />
-                <button className="rounded-xl border border-border px-4 py-2 text-sm font-medium transition hover:border-brand hover:text-brand-dark">
-                  Regenerate link
-                </button>
+                <RegenerateInviteButton />
               </form>
             </div>
           </div>

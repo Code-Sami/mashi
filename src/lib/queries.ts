@@ -12,6 +12,10 @@ import { MarketPriceHistoryModel } from "@/models/MarketPriceHistory";
 import { JoinRequestModel } from "@/models/JoinRequest";
 import { UserModel } from "@/models/User";
 import { ModerationLogModel } from "@/models/ModerationLog";
+import type {
+  PlatformAnalyticsRangeDays,
+  PlatformTimeSeriesPoint,
+} from "@/lib/platform-analytics";
 import { isEffectiveGroupOwner } from "@/lib/super-admin";
 
 function fullName(user: {
@@ -780,4 +784,203 @@ export async function getPublicUserProfileData(userId: string, viewerUserId?: st
 
 export function toObjectId(id: string) {
   return new Types.ObjectId(id);
+}
+
+type JoinBreakdownEntry = {
+  source: string;
+  count: number;
+  percent: number;
+};
+
+function formatJoinSource(via: string) {
+  if (via === "invite_link") return "Invite link";
+  if (via === "organic_public") return "Organic (public group page)";
+  if (via === "request_approved") return "Approved request";
+  if (via === "group_created") return "Group creator";
+  return via ? via.replaceAll("_", " ") : "Unknown";
+}
+
+export async function getPlatformAnalyticsData() {
+  await connectToDatabase();
+  await ensureSeedData();
+
+  const [totalUsers, totalGroups, totalMarkets, totalMemberships, totalBets] = await Promise.all([
+    UserModel.countDocuments({}),
+    GroupModel.countDocuments({}),
+    MarketModel.countDocuments({}),
+    GroupMemberModel.countDocuments({}),
+    BetModel.countDocuments({}),
+  ]);
+
+  const usersWithBets = (await BetModel.distinct("userId")).length;
+  const percentUsersWithBet = totalUsers > 0 ? (usersWithBets / totalUsers) * 100 : 0;
+  const avgMarketsPerGroup = totalGroups > 0 ? totalMarkets / totalGroups : 0;
+
+  const marketsByGroupRows = await GroupModel.aggregate<{
+    _id: Types.ObjectId;
+    name: string;
+    marketCount: number;
+  }>([
+    {
+      $lookup: {
+        from: "markets",
+        localField: "_id",
+        foreignField: "groupId",
+        as: "markets",
+      },
+    },
+    {
+      $project: {
+        name: 1,
+        marketCount: { $size: "$markets" },
+      },
+    },
+    { $sort: { marketCount: -1, name: 1 } },
+  ]);
+
+  const joinSourceRaw = await ActivityModel.aggregate<{ _id: string | null; count: number }>([
+    { $match: { type: "member_joined" } },
+    {
+      $group: {
+        _id: "$metadata.via",
+        count: { $sum: 1 },
+      },
+    },
+    { $sort: { count: -1 } },
+  ]);
+
+  const totalTrackedJoins = joinSourceRaw.reduce((sum, row) => sum + row.count, 0);
+  const joinBreakdown: JoinBreakdownEntry[] = joinSourceRaw.map((row) => ({
+    source: formatJoinSource(row._id || ""),
+    count: row.count,
+    percent: totalTrackedJoins > 0 ? (row.count / totalTrackedJoins) * 100 : 0,
+  }));
+
+  return {
+    totals: {
+      users: totalUsers,
+      groups: totalGroups,
+      markets: totalMarkets,
+      memberships: totalMemberships,
+      bets: totalBets,
+    },
+    engagement: {
+      usersWithBets,
+      percentUsersWithBet,
+    },
+    marketsPerGroup: {
+      average: avgMarketsPerGroup,
+      byGroup: marketsByGroupRows.map((row) => ({
+        groupId: row._id.toString(),
+        groupName: row.name,
+        marketCount: row.marketCount,
+      })),
+    },
+    joins: {
+      totalTrackedJoins,
+      breakdown: joinBreakdown,
+    },
+  };
+}
+
+function generateUtcDateKeysInclusive(start: Date, end: Date): string[] {
+  const keys: string[] = [];
+  const startDay = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+  const endDay = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+  for (let t = startDay; t <= endDay; t += 24 * 60 * 60 * 1000) {
+    const d = new Date(t);
+    keys.push(
+      `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`
+    );
+  }
+  return keys;
+}
+
+const DAY_GROUP_STAGE = {
+  $group: {
+    _id: {
+      $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "UTC" },
+    },
+    count: { $sum: 1 },
+  },
+} as const;
+
+function seriesMap(rows: { _id: string; count: number }[]): Map<string, number> {
+  return new Map(rows.map((r) => [r._id, r.count]));
+}
+
+export async function getPlatformAnalyticsTimeSeries(rangeDays: PlatformAnalyticsRangeDays): Promise<{
+  rangeDays: PlatformAnalyticsRangeDays;
+  startDate: string;
+  endDate: string;
+  points: PlatformTimeSeriesPoint[];
+}> {
+  await connectToDatabase();
+  await ensureSeedData();
+
+  const now = new Date();
+  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+  const rangeStart = new Date(todayStart);
+  rangeStart.setUTCDate(rangeStart.getUTCDate() - (rangeDays - 1));
+  const endBoundary = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+
+  const dateWindow = { createdAt: { $gte: rangeStart, $lte: endBoundary } };
+
+  const [userRows, groupRows, marketRows, betRows, membershipRows, joinRows] = await Promise.all([
+    UserModel.aggregate<{ _id: string; count: number }>([
+      { $match: dateWindow },
+      DAY_GROUP_STAGE,
+      { $sort: { _id: 1 } },
+    ]),
+    GroupModel.aggregate<{ _id: string; count: number }>([
+      { $match: dateWindow },
+      DAY_GROUP_STAGE,
+      { $sort: { _id: 1 } },
+    ]),
+    MarketModel.aggregate<{ _id: string; count: number }>([
+      { $match: dateWindow },
+      DAY_GROUP_STAGE,
+      { $sort: { _id: 1 } },
+    ]),
+    BetModel.aggregate<{ _id: string; count: number }>([
+      { $match: dateWindow },
+      DAY_GROUP_STAGE,
+      { $sort: { _id: 1 } },
+    ]),
+    GroupMemberModel.aggregate<{ _id: string; count: number }>([
+      { $match: dateWindow },
+      DAY_GROUP_STAGE,
+      { $sort: { _id: 1 } },
+    ]),
+    ActivityModel.aggregate<{ _id: string; count: number }>([
+      { $match: { ...dateWindow, type: "member_joined" } },
+      DAY_GROUP_STAGE,
+      { $sort: { _id: 1 } },
+    ]),
+  ]);
+
+  const usersMap = seriesMap(userRows);
+  const groupsMap = seriesMap(groupRows);
+  const marketsMap = seriesMap(marketRows);
+  const betsMap = seriesMap(betRows);
+  const membershipsMap = seriesMap(membershipRows);
+  const joinsMap = seriesMap(joinRows);
+
+  const keys = generateUtcDateKeysInclusive(rangeStart, endBoundary);
+  const points: PlatformTimeSeriesPoint[] = keys.map((date) => ({
+    date,
+    users: usersMap.get(date) ?? 0,
+    groups: groupsMap.get(date) ?? 0,
+    markets: marketsMap.get(date) ?? 0,
+    bets: betsMap.get(date) ?? 0,
+    memberships: membershipsMap.get(date) ?? 0,
+    memberJoins: joinsMap.get(date) ?? 0,
+  }));
+
+  return {
+    rangeDays,
+    startDate: keys[0] ?? "",
+    endDate: keys[keys.length - 1] ?? "",
+    points,
+  };
 }

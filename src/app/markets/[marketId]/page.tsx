@@ -1,4 +1,5 @@
 import { joinGroupAction } from "@/app/actions";
+import type { BetShareVisualProps } from "@/components/bet-share-visual-types";
 import { BetForm } from "@/components/bet-form";
 import { BotText } from "@/components/bot-text";
 import { DeleteMarketButton } from "@/components/delete-market-button";
@@ -191,6 +192,14 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
 
   const isResolved = data.market.status === "resolved" && !!data.market.outcome;
   const showSettlementPopup = Boolean(user && query.resolved === "true" && isResolved);
+  const siteBase = process.env.NEXT_PUBLIC_APP_URL || "https://www.mashimarkets.com";
+  const marketAbsoluteUrl = `${siteBase}/markets/${data.market.id}`;
+
+  function displayNameForSession(u: NonNullable<typeof user>) {
+    const combined = `${u.firstName || ""} ${u.lastName || ""}`.trim();
+    return combined || u.displayName || u.name || "Member";
+  }
+
   const settlementEntries = isResolved
     ? data.bets.map((bet) => {
         const actor = userMap.get(bet.userId);
@@ -205,6 +214,59 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
         };
       })
     : [];
+
+  let settlementShareVisual: BetShareVisualProps | null = null;
+  if (user && isResolved && settlementEntries.length > 0) {
+    const mine = settlementEntries.filter((e) => e.userId === user._id.toString());
+    if (mine.length > 0) {
+      const stake = mine.reduce((s, e) => s + e.amount, 0);
+      const totalPnl = mine.reduce((s, e) => s + e.pnl, 0);
+      const totalPayout = mine.reduce((s, e) => s + e.payout, 0);
+      const primary = mine.reduce((a, b) => (a.amount >= b.amount ? a : b));
+      const outcomeVariant = totalPnl > 0 ? "won" : totalPnl < 0 ? "lost" : "push";
+      const yesStake = mine.filter((e) => e.side === "yes").reduce((s, e) => s + e.amount, 0);
+      const noStake = mine.filter((e) => e.side === "no").reduce((s, e) => s + e.amount, 0);
+      const hedgedSettlement = yesStake > 0 && noStake > 0;
+
+      const shareMarketOutcome =
+        data.market.outcome === "yes" || data.market.outcome === "no"
+          ? data.market.outcome
+          : undefined;
+
+      settlementShareVisual = hedgedSettlement
+        ? {
+            variant: outcomeVariant,
+            shareKind: "hedged",
+            displayName: mine[0].name,
+            question: data.market.question,
+            yesStakeTotal: yesStake,
+            noStakeTotal: noStake,
+            yesPriceAfter: data.market.yesPrice,
+            noPriceAfter: data.market.noPrice,
+            totalVolume: data.market.totalVolume,
+            deadlineIso: data.market.deadline,
+            resolvedAtIso: data.market.resolvedAt,
+            marketOutcome: shareMarketOutcome,
+            payout: totalPayout,
+            pnl: totalPnl,
+          }
+        : {
+            variant: outcomeVariant,
+            displayName: mine[0].name,
+            question: data.market.question,
+            side: primary.side,
+            amount: stake,
+            yesPriceAfter: data.market.yesPrice,
+            noPriceAfter: data.market.noPrice,
+            totalVolume: data.market.totalVolume,
+            deadlineIso: data.market.deadline,
+            resolvedAtIso: data.market.resolvedAt,
+            marketOutcome: shareMarketOutcome,
+            payout: totalPayout,
+            pnl: totalPnl,
+          };
+    }
+  }
 
   return (
     <div className="grid gap-6">
@@ -307,6 +369,8 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
             outcome={data.market.outcome as "yes" | "no"}
             totalPool={data.market.totalVolume}
             entries={settlementEntries}
+            marketAbsoluteUrl={marketAbsoluteUrl}
+            settlementShareVisual={settlementShareVisual}
           />
         ) : isBotMarket ? (
           <article className="rounded-2xl border border-violet-200 bg-violet-50 p-4 shadow-[var(--card-shadow)] sm:p-6">
@@ -360,6 +424,10 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
             <h2 className="font-semibold">Place bet</h2>
             <BetForm
               marketId={data.market.id}
+              marketQuestion={data.market.question}
+              marketAbsoluteUrl={marketAbsoluteUrl}
+              viewerDisplayName={user ? displayNameForSession(user) : "Member"}
+              marketDeadlineIso={data.market.deadline}
               yesShares={data.market.yesShares}
               noShares={data.market.noShares}
               canBet={canBet}
@@ -450,6 +518,8 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
           totalPool={data.market.totalVolume}
           entries={settlementEntries}
           marketId={data.market.id}
+          marketAbsoluteUrl={marketAbsoluteUrl}
+          settlementShareVisual={settlementShareVisual}
         />
       ) : null}
     </div>

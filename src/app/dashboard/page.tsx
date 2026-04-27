@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { MarketQuestionWithMentions } from "@/components/market-question-with-mentions";
 import { getDashboardData } from "@/lib/queries";
 import { ensureSeedData } from "@/lib/seed";
+import { isSuperAdminUserId } from "@/lib/super-admin";
 import { requireAuthUser } from "@/lib/session";
 import { relativeTime } from "@/lib/utils";
 
@@ -14,6 +15,7 @@ export const metadata: Metadata = {
 export default async function DashboardPage() {
   const user = await requireAuthUser();
   await ensureSeedData();
+  const isSuperAdmin = isSuperAdminUserId(user._id.toString());
   const data = await getDashboardData(user._id.toString());
   const explicitFullName = `${user.firstName || ""} ${user.lastName || ""}`.trim();
   const legacyName = (user.displayName || user.name || "").trim();
@@ -29,7 +31,17 @@ export default async function DashboardPage() {
     <div className="grid gap-6">
       {/* Welcome + Stats */}
       <section className="rounded-2xl border border-border bg-white p-6 shadow-[var(--card-shadow)]">
-        <h1 className="text-2xl font-bold">Welcome back, {userFullName}</h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-2xl font-bold">Welcome back, {userFullName}</h1>
+          {isSuperAdmin ? (
+            <Link
+              href="/platform-analytics"
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition hover:border-brand hover:text-brand-dark"
+            >
+              Platform analytics
+            </Link>
+          ) : null}
+        </div>
         <p className="mt-1 text-sm text-foreground-secondary">Here&apos;s what&apos;s happening across your groups.</p>
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-xl bg-background-secondary p-3">

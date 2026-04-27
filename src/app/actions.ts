@@ -22,6 +22,7 @@ import { UserModel } from "@/models/User";
 import { ModerationLogModel } from "@/models/ModerationLog";
 import { NotificationModel } from "@/models/Notification";
 import { moderateQuestion } from "@/lib/moderation";
+import { appBaseUrl } from "@/lib/password-reset-email";
 import { safeInternalPath } from "@/lib/safe-internal-path";
 import { isEffectiveGroupOwner, isSuperAdminUserId } from "@/lib/super-admin";
 import {
@@ -197,7 +198,7 @@ export async function joinGroupAction(formData: FormData) {
     await logMemberJoinedActivity({
       groupId,
       actorUserId: user._id,
-      via: "invite_link",
+      via: "organic_public",
     });
   }
 
@@ -444,7 +445,7 @@ export async function placeBetAction(formData: FormData) {
   const prices = getPrices(market.yesShares, market.noShares);
   await market.save();
 
-  await BetModel.create({
+  const createdBet = await BetModel.create({
     marketId: market._id,
     userId: user._id,
     side,
@@ -469,6 +470,32 @@ export async function placeBetAction(formData: FormData) {
 
   revalidatePath(`/markets/${market._id.toString()}`);
   revalidatePath(`/groups/${market.groupId.toString()}`);
+
+  const userStakeDocs = await BetModel.find({
+    marketId: market._id,
+    userId: user._id,
+  })
+    .select("side amount")
+    .lean();
+
+  let userYesStake = 0;
+  let userNoStake = 0;
+  for (const b of userStakeDocs) {
+    if (b.side === "yes") userYesStake += b.amount;
+    else userNoStake += b.amount;
+  }
+  const hedged = userYesStake > 0 && userNoStake > 0;
+
+  return {
+    ok: true as const,
+    betId: createdBet._id.toString(),
+    yesPrice: prices.yesPrice,
+    noPrice: prices.noPrice,
+    totalVolume: market.totalVolume,
+    userYesStake,
+    userNoStake,
+    hedged,
+  };
 }
 
 export async function resolveMarketAction(formData: FormData) {
@@ -716,6 +743,30 @@ export async function regenerateGroupInviteAction(formData: FormData) {
   );
 
   revalidatePath(`/groups/${groupId}`);
+}
+
+export async function getFreshGroupInviteUrlAction(groupId: string) {
+  const user = await requireAuthUser();
+  if (!groupId) throw new Error("Group id is required.");
+
+  await connectToDatabase();
+  const group = await GroupModel.findById(groupId).lean();
+  if (!group) throw new Error("Group not found.");
+
+  const isOwner = isEffectiveGroupOwner(user._id.toString(), group.ownerId.toString());
+  const isMember = Boolean(await GroupMemberModel.exists({ groupId, userId: user._id }));
+  const canUseInviteLink = isMember && (group.visibility === "public" || isOwner);
+  if (!canUseInviteLink) {
+    throw new Error("You do not have permission to create invite links for this group.");
+  }
+
+  const invite = await getOrCreateActiveGroupInvite(
+    groupId,
+    user._id.toString(),
+    getJoinModeFromVisibility((group.visibility || "public") as "public" | "private"),
+  );
+
+  return `${appBaseUrl()}/invite/${invite.code}`;
 }
 
 export async function approveJoinRequestAction(formData: FormData) {

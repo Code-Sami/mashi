@@ -3,6 +3,11 @@ import { GroupInviteModel } from "@/models/GroupInvite";
 import { generateInviteCode } from "@/lib/utils";
 
 export type GroupInviteJoinMode = "auto" | "request";
+const INVITE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function createInviteExpiryDate() {
+  return new Date(Date.now() + INVITE_TTL_MS);
+}
 
 function isInviteUsable(invite: { isActive?: boolean; expiresAt?: Date | null; maxUses?: number | null; useCount?: number }) {
   if (!invite.isActive) return false;
@@ -34,9 +39,16 @@ export async function getOrCreateActiveGroupInvite(
     .sort({ createdAt: -1 })
     .lean();
   if (existing && isInviteUsable(existing)) {
-    if ((existing.joinMode || "auto") !== joinMode) {
-      await GroupInviteModel.updateOne({ _id: existing._id }, { $set: { joinMode } });
-      return { ...existing, joinMode };
+    const nextExpiresAt = existing.expiresAt || createInviteExpiryDate();
+    const shouldUpdateJoinMode = (existing.joinMode || "auto") !== joinMode;
+    const shouldUpdateExpiry = !existing.expiresAt;
+
+    if (shouldUpdateJoinMode || shouldUpdateExpiry) {
+      await GroupInviteModel.updateOne(
+        { _id: existing._id },
+        { $set: { joinMode, expiresAt: nextExpiresAt } },
+      );
+      return { ...existing, joinMode, expiresAt: nextExpiresAt };
     }
     return existing;
   }
@@ -50,7 +62,7 @@ export async function getOrCreateActiveGroupInvite(
     isActive: true,
     useCount: 0,
     maxUses: null,
-    expiresAt: null,
+    expiresAt: createInviteExpiryDate(),
   });
 }
 

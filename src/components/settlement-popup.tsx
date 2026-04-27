@@ -1,5 +1,7 @@
 "use client";
 
+import type { BetShareVisualProps } from "@/components/bet-share-visual-types";
+import { SettlementShareButton } from "@/components/settlement-share-button";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -18,6 +20,8 @@ type SettlementProps = {
   totalPool: number;
   entries: SettlementEntry[];
   marketId: string;
+  marketAbsoluteUrl: string;
+  settlementShareVisual: BetShareVisualProps | null;
 };
 
 function aggregateEntries(entries: SettlementEntry[]) {
@@ -117,7 +121,15 @@ function SettlementBody({ entries }: { entries: SettlementEntry[] }) {
   );
 }
 
-export function SettlementPopup({ question, outcome, totalPool, entries, marketId }: SettlementProps) {
+export function SettlementPopup({
+  question,
+  outcome,
+  totalPool,
+  entries,
+  marketId,
+  marketAbsoluteUrl,
+  settlementShareVisual,
+}: SettlementProps) {
   const router = useRouter();
 
   function close() {
@@ -148,8 +160,17 @@ export function SettlementPopup({ question, outcome, totalPool, entries, marketI
           <SettlementBody entries={entries} />
         </div>
 
-        <div className="border-t border-border px-5 py-3">
+        <div className="grid gap-2 border-t border-border px-5 py-3">
+          {settlementShareVisual ? (
+            <SettlementShareButton
+              marketAbsoluteUrl={marketAbsoluteUrl}
+              visual={settlementShareVisual}
+              label="Share my result"
+              variant="primary"
+            />
+          ) : null}
           <button
+            type="button"
             onClick={close}
             className="w-full rounded-xl bg-brand-dark py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark-light"
           >
@@ -161,7 +182,13 @@ export function SettlementPopup({ question, outcome, totalPool, entries, marketI
   );
 }
 
-export function SettlementCard({ outcome, totalPool, entries }: Omit<SettlementProps, "question" | "marketId">) {
+export function SettlementCard({
+  outcome,
+  totalPool,
+  entries,
+  marketAbsoluteUrl,
+  settlementShareVisual,
+}: Omit<SettlementProps, "question" | "marketId">) {
   return (
     <article className="rounded-2xl border border-border bg-white shadow-[var(--card-shadow)]">
       <div className={`flex items-center justify-between rounded-t-2xl px-4 py-3 sm:px-6 ${outcome === "yes" ? "bg-yes" : "bg-no"}`}>
@@ -177,6 +204,16 @@ export function SettlementCard({ outcome, totalPool, entries }: Omit<SettlementP
           <SettlementBody entries={entries} />
         )}
       </div>
+      {settlementShareVisual ? (
+        <div className="border-t border-border px-4 py-3 sm:px-6">
+          <SettlementShareButton
+            marketAbsoluteUrl={marketAbsoluteUrl}
+            visual={settlementShareVisual}
+            label="Share result card"
+            variant="outline"
+          />
+        </div>
+      ) : null}
     </article>
   );
 }

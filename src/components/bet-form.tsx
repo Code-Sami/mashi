@@ -1,10 +1,16 @@
 "use client";
 
 import { placeBetAction } from "@/app/actions";
-import { useState, useRef, useTransition } from "react";
+import { BetSharePopup } from "@/components/bet-share-popup";
+import { useRef, useState, useTransition } from "react";
 
 type BetFormProps = {
   marketId: string;
+  marketQuestion: string;
+  /** Absolute URL to this market for share targets */
+  marketAbsoluteUrl: string;
+  viewerDisplayName: string;
+  marketDeadlineIso: string;
   yesShares: number;
   noShares: number;
   canBet: boolean;
@@ -53,6 +59,10 @@ function getBetPreview(
 
 export function BetForm({
   marketId,
+  marketQuestion,
+  marketAbsoluteUrl,
+  viewerDisplayName,
+  marketDeadlineIso,
   yesShares,
   noShares,
   canBet,
@@ -67,6 +77,16 @@ export function BetForm({
   const [preview, setPreview] = useState<BetPreview | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
+  const [freshBetShare, setFreshBetShare] = useState<{
+    hedged: boolean;
+    side: "yes" | "no";
+    amount: number;
+    yesStakeTotal: number;
+    noStakeTotal: number;
+    yesPriceAfter: number;
+    noPriceAfter: number;
+    totalVolume: number;
+  } | null>(null);
 
   function handlePlaceBet(e: React.FormEvent) {
     e.preventDefault();
@@ -79,16 +99,30 @@ export function BetForm({
 
   function handleConfirm() {
     if (!side) return;
+    const sideSnap = side;
+    const amountNum = Number(amount);
     startTransition(async () => {
       const formData = new FormData();
       formData.set("marketId", marketId);
-      formData.set("side", side);
-      formData.set("amount", amount);
-      await placeBetAction(formData);
+      formData.set("side", sideSnap);
+      formData.set("amount", String(amountNum));
+      const result = await placeBetAction(formData);
       setStep("input");
       setPreview(null);
       setAmount("");
       setSide(null);
+      if (result?.ok) {
+        setFreshBetShare({
+          hedged: result.hedged,
+          side: sideSnap,
+          amount: amountNum,
+          yesStakeTotal: result.userYesStake,
+          noStakeTotal: result.userNoStake,
+          yesPriceAfter: result.yesPrice,
+          noPriceAfter: result.noPrice,
+          totalVolume: result.totalVolume,
+        });
+      }
     });
   }
 
@@ -118,6 +152,39 @@ export function BetForm({
         <p className="mt-2 rounded-xl bg-foreground-tertiary/10 p-3 text-sm text-foreground-secondary">
           Betting is closed — the deadline has passed. Waiting for the umpire to resolve.
         </p>
+      ) : null}
+
+      {freshBetShare ? (
+        <BetSharePopup
+          marketAbsoluteUrl={marketAbsoluteUrl}
+          visual={
+            freshBetShare.hedged
+              ? {
+                  variant: "placed",
+                  shareKind: "hedged",
+                  displayName: viewerDisplayName,
+                  question: marketQuestion,
+                  yesStakeTotal: freshBetShare.yesStakeTotal,
+                  noStakeTotal: freshBetShare.noStakeTotal,
+                  yesPriceAfter: freshBetShare.yesPriceAfter,
+                  noPriceAfter: freshBetShare.noPriceAfter,
+                  totalVolume: freshBetShare.totalVolume,
+                  deadlineIso: marketDeadlineIso,
+                }
+              : {
+                  variant: "placed",
+                  displayName: viewerDisplayName,
+                  question: marketQuestion,
+                  side: freshBetShare.side,
+                  amount: freshBetShare.amount,
+                  yesPriceAfter: freshBetShare.yesPriceAfter,
+                  noPriceAfter: freshBetShare.noPriceAfter,
+                  totalVolume: freshBetShare.totalVolume,
+                  deadlineIso: marketDeadlineIso,
+                }
+          }
+          onClose={() => setFreshBetShare(null)}
+        />
       ) : null}
 
       {step === "input" ? (
