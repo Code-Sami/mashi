@@ -42,5 +42,4 @@ next-env.d.ts
 
 # mobile dev
 /apps
-/src/app/api/mobile
 /src/lib/mobile-auth.ts
