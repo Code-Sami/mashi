@@ -62,7 +62,7 @@ export default async function RootLayout({
       <body className="min-h-full bg-background-secondary text-foreground">
         {metaPixelId ? (
           <>
-            <Script id="meta-pixel-base" strategy="afterInteractive">
+            <Script id="meta-pixel-base" strategy="beforeInteractive">
               {`
                 !function(f,b,e,v,n,t,s)
                 {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
