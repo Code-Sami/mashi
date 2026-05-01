@@ -30,7 +30,7 @@ const groupSchema = new Schema(
       default: "public",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export type GroupDocument = InferSchemaType<typeof groupSchema>;
