@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { safeInternalPath } from "@/lib/safe-internal-path";
 
 export default function LoginClient() {
@@ -13,7 +13,18 @@ export default function LoginClient() {
     const raw = searchParams.get("callbackUrl");
     return safeInternalPath(raw) || "/dashboard";
   }, [searchParams]);
+  const signupCreated = searchParams.get("created") === "1";
   const passwordResetOk = searchParams.get("reset") === "1";
+
+  useEffect(() => {
+    if (!signupCreated) return;
+    const firedKey = "meta_complete_registration_fired";
+    if (window.sessionStorage.getItem(firedKey) === "1") return;
+    const fbqFn = (window as Window & { fbq?: (...args: unknown[]) => void }).fbq;
+    if (typeof fbqFn !== "function") return;
+    fbqFn("track", "CompleteRegistration", { status: "completed" });
+    window.sessionStorage.setItem(firedKey, "1");
+  }, [signupCreated]);
 
   return (
     <div className="mx-auto max-w-md rounded-2xl border border-border bg-white p-8 shadow-[var(--card-shadow)]">
@@ -22,6 +33,11 @@ export default function LoginClient() {
       {passwordResetOk ? (
         <p className="mt-4 rounded-xl bg-increase/10 p-3 text-sm text-increase">
           Your password was updated. Log in with your new password.
+        </p>
+      ) : null}
+      {signupCreated ? (
+        <p className="mt-4 rounded-xl bg-increase/10 p-3 text-sm text-increase">
+          Account created. You can log in now.
         </p>
       ) : null}
       <form
